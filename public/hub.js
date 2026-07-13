@@ -53,7 +53,7 @@ function buildColumns() {
   for (let i = 1; i <= tableCount; i++) {
     const col = document.createElement('section');
     col.className = 'col';
-    col.innerHTML = `<h2>Table ${i}</h2><div class="col-body" id="col-${i}"><div class="col-empty">No posts yet.</div></div>`;
+    col.innerHTML = `<h2>Line ${i}</h2><div class="col-body" id="col-${i}"><div class="col-empty">No posts yet.</div></div>`;
     board.appendChild(col);
   }
 }
@@ -78,7 +78,7 @@ function buildCard(p) {
   img.className = 'thumb';
   img.loading = 'lazy';
   img.src = p.thumb_path;
-  img.alt = `Table ${p.table_no} photo`;
+  img.alt = `Line ${p.table_no} photo`;
   img.addEventListener('click', () => openLightbox(p.photo_path));
 
   const body = document.createElement('div');
@@ -111,7 +111,7 @@ function buildCard(p) {
     action('POST', `/api/posts/${p.id}/approve`).catch(() => {})
   );
   const decline = mkBtn('decline', '✗ Decline', () => {
-    const reasonText = prompt(`Reason for declining (Table ${p.table_no}):`);
+    const reasonText = prompt(`Reason for declining (Line ${p.table_no}):`);
     if (reasonText && reasonText.trim()) {
       action('POST', `/api/posts/${p.id}/decline`, { reason: reasonText.trim() }).catch(() => {});
     }
@@ -121,7 +121,7 @@ function buildCard(p) {
   const row2 = document.createElement('div');
   row2.className = 'row';
   const fb = mkBtn('', '✎ Feedback', () => {
-    const text = prompt(`Feedback to Table ${p.table_no}:`);
+    const text = prompt(`Feedback to Line ${p.table_no}:`);
     if (text && text.trim()) {
       action('POST', `/api/posts/${p.id}/feedback`, { text: text.trim() }).catch(() => {});
     }

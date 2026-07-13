@@ -16,8 +16,8 @@ const statusEl = el('status');
 const banner = el('banner');
 const subs = el('subs');
 
-el('title').textContent = tableNo ? `Table ${tableNo}` : 'Table —';
-document.title = `SnapBox — Table ${tableNo || '—'}`;
+el('title').textContent = tableNo ? `Line ${tableNo}` : 'Line —';
+document.title = `SnapBox — Line ${tableNo || '—'}`;
 
 let blob = null;
 let stream = null;
