@@ -7,6 +7,7 @@ module.exports = {
       script: 'server/index.js',
       cwd: __dirname,
       instances: 1,
+      exec_mode: 'fork', // fork (not cluster): one process keeps all SSE clients together
       autorestart: true,
       max_memory_restart: '300M',
       env: {

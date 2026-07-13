@@ -1,6 +1,5 @@
-import { describe, it, expect, beforeAll, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import request from 'supertest';
-import sharp from 'sharp';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -13,14 +12,9 @@ const publicDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..
 const PIN = '4242';
 const FIXED = new Date(2026, 6, 13, 10, 0); // 2026-07-13 10:00 local -> shift '2026-07-13'
 
-let img; // a small valid JPEG buffer
-beforeAll(async () => {
-  img = await sharp({
-    create: { width: 16, height: 16, channels: 3, background: { r: 200, g: 40, b: 40 } },
-  })
-    .jpeg()
-    .toBuffer();
-});
+// The server stores the received bytes as-is (no image processing), so any
+// buffer sent with an image content-type is enough to exercise the endpoints.
+const img = Buffer.from('ffd8ffe000104a46494600010100000100010000ffd9', 'hex');
 
 let db, uploadsDir, app;
 beforeEach(() => {

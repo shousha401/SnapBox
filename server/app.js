@@ -72,9 +72,16 @@ export function createApp(opts) {
         return res.status(400).json({ error: 'bad_table' });
       }
       if (!req.file) return res.status(400).json({ error: 'photo_required' });
+      if (!/^image\//.test(req.file.mimetype || '')) {
+        return res.status(400).json({ error: 'bad_file' });
+      }
 
       const note = String(req.body.note || '').slice(0, 1000);
-      const { photo_path, thumb_path } = await savePhoto(req.file.buffer, uploadsDir);
+      const { photo_path, thumb_path } = await savePhoto(
+        req.file.buffer,
+        uploadsDir,
+        req.file.mimetype
+      );
       const ts = now();
       const post = db.createPost({
         table_no: tableNo,

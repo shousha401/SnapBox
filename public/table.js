@@ -21,6 +21,24 @@ document.title = `SnapBox — Table ${tableNo || '—'}`;
 let blob = null;
 let stream = null;
 
+// Downscale in the browser before upload — keeps files small and means the
+// server needs no native image library.
+const MAX_DIM = 1600;
+function fitDims(w, h) {
+  if (w <= MAX_DIM && h <= MAX_DIM) return { w, h };
+  const r = Math.min(MAX_DIM / w, MAX_DIM / h);
+  return { w: Math.round(w * r), h: Math.round(h * r) };
+}
+function drawResized(source, sw, sh) {
+  const { w, h } = fitDims(sw, sh);
+  canvas.width = w;
+  canvas.height = h;
+  canvas.getContext('2d').drawImage(source, 0, 0, w, h);
+}
+function canvasToJpeg() {
+  return new Promise((resolve) => canvas.toBlob((b) => resolve(b), 'image/jpeg', 0.85));
+}
+
 function setStatus(text, kind = '') {
   statusEl.textContent = text;
   statusEl.className = 'status' + (kind ? ' ' + kind : '');
@@ -71,20 +89,13 @@ function resetCapture() {
   }
 }
 
-shoot.addEventListener('click', () => {
+shoot.addEventListener('click', async () => {
   if (stream && video.videoWidth) {
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    canvas.getContext('2d').drawImage(video, 0, 0);
-    canvas.toBlob(
-      (b) => {
-        if (!b) return;
-        blob = b;
-        showPreview(URL.createObjectURL(b));
-      },
-      'image/jpeg',
-      0.9
-    );
+    drawResized(video, video.videoWidth, video.videoHeight);
+    const b = await canvasToJpeg();
+    if (!b) return;
+    blob = b;
+    showPreview(URL.createObjectURL(b));
   } else {
     fileInput.click();
   }
@@ -92,10 +103,20 @@ shoot.addEventListener('click', () => {
 
 fileInput.addEventListener('change', () => {
   const f = fileInput.files && fileInput.files[0];
-  if (f) {
+  if (!f) return;
+  const img = new Image();
+  img.onload = async () => {
+    drawResized(img, img.naturalWidth, img.naturalHeight);
+    blob = (await canvasToJpeg()) || f;
+    showPreview(URL.createObjectURL(blob));
+    URL.revokeObjectURL(img.src);
+  };
+  img.onerror = () => {
+    // Not a browser-decodable image (e.g. HEIC) — send the original bytes.
     blob = f;
     showPreview(URL.createObjectURL(f));
-  }
+  };
+  img.src = URL.createObjectURL(f);
 });
 
 retake.addEventListener('click', resetCapture);

@@ -1,29 +1,24 @@
-import sharp from 'sharp';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import fs from 'node:fs';
 
-/**
- * Compress an uploaded image into a full-size JPEG + a small thumbnail.
- * Returns web paths (served under /uploads) to store in the DB.
- */
-export async function savePhoto(buffer, uploadsDir) {
+const EXT_BY_MIME = {
+  'image/jpeg': 'jpg',
+  'image/jpg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+  'image/gif': 'gif',
+};
+
+// The tablet resizes the photo in the browser before upload, so the server just
+// stores the received bytes — no native image library (keeps us clear of the
+// endpoint security block on libvips/sharp). The single stored file doubles as
+// its own thumbnail (the hub scales it with CSS).
+export async function savePhoto(buffer, uploadsDir, mimetype = 'image/jpeg') {
   fs.mkdirSync(uploadsDir, { recursive: true });
-  const base = `${Date.now()}-${randomUUID()}`;
-  const fullName = `${base}.jpg`;
-  const thumbName = `${base}.thumb.jpg`;
-
-  await sharp(buffer)
-    .rotate() // honour EXIF orientation from tablet cameras
-    .resize({ width: 1600, height: 1600, fit: 'inside', withoutEnlargement: true })
-    .jpeg({ quality: 80 })
-    .toFile(path.join(uploadsDir, fullName));
-
-  await sharp(buffer)
-    .rotate()
-    .resize({ width: 400, height: 400, fit: 'inside', withoutEnlargement: true })
-    .jpeg({ quality: 70 })
-    .toFile(path.join(uploadsDir, thumbName));
-
-  return { photo_path: `/uploads/${fullName}`, thumb_path: `/uploads/${thumbName}` };
+  const ext = EXT_BY_MIME[String(mimetype).toLowerCase()] || 'jpg';
+  const name = `${Date.now()}-${randomUUID()}.${ext}`;
+  await fs.promises.writeFile(path.join(uploadsDir, name), buffer);
+  const web = `/uploads/${name}`;
+  return { photo_path: web, thumb_path: web };
 }

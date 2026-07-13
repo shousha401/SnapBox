@@ -76,5 +76,6 @@ endpoint (happy path, bad input, and the PIN gate). CI runs them on every push.
 
 ## Stack
 
-Node + Express · SQLite (better-sqlite3) · sharp (image compression) · SSE ·
-vanilla-JS frontend (no build step). Runs under PM2.
+Node + Express · SQLite (better-sqlite3) · SSE · vanilla-JS frontend (no build
+step). Photos are resized in the browser before upload, so the server has **no
+native image dependency**. Runs under PM2.
