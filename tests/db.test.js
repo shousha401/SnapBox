@@ -43,8 +43,21 @@ describe('posts', () => {
 
   it('approves a post', () => {
     const p = db.createPost(makePost());
-    expect(db.setStatus(p.id, 'approved')).toBe(true);
+    expect(db.approve(p.id)).toBe(true);
     expect(db.getPost(p.id).status).toBe('approved');
+  });
+
+  it('declines a post with a reason, and approve clears the reason', () => {
+    const p = db.createPost(makePost());
+    expect(db.decline(p.id, 'label unreadable')).toBe(true);
+    let row = db.getPost(p.id);
+    expect(row.status).toBe('declined');
+    expect(row.decline_reason).toBe('label unreadable');
+
+    db.approve(p.id);
+    row = db.getPost(p.id);
+    expect(row.status).toBe('approved');
+    expect(row.decline_reason).toBeNull();
   });
 
   it('deletes a post and cascades its feedback', () => {
@@ -58,6 +71,20 @@ describe('posts', () => {
 
   it('deletePost returns null for a missing id', () => {
     expect(db.deletePost(999)).toBeNull();
+  });
+});
+
+describe('listPostsByTableShift', () => {
+  it('returns only that table + shift, newest first, with feedback', () => {
+    const a = db.createPost(makePost({ table_no: 1, created_at: '2026-07-13T10:00:00.000Z' }));
+    const b = db.createPost(makePost({ table_no: 1, created_at: '2026-07-13T11:00:00.000Z' }));
+    db.createPost(makePost({ table_no: 2 })); // other table
+    db.createPost(makePost({ table_no: 1, shift_id: '2026-07-12' })); // other shift
+    db.addFeedback(a.id, 'redo', '2026-07-13T10:05:00.000Z');
+
+    const list = db.listPostsByTableShift(1, '2026-07-13');
+    expect(list.map((p) => p.id)).toEqual([b.id, a.id]);
+    expect(list.find((p) => p.id === a.id).feedback).toHaveLength(1);
   });
 });
 

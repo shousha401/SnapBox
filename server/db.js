@@ -2,14 +2,15 @@ import Database from 'better-sqlite3';
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS posts (
-  id          INTEGER PRIMARY KEY AUTOINCREMENT,
-  table_no    INTEGER NOT NULL,
-  note        TEXT    NOT NULL DEFAULT '',
-  photo_path  TEXT    NOT NULL,
-  thumb_path  TEXT    NOT NULL,
-  status      TEXT    NOT NULL DEFAULT 'pending',
-  shift_id    TEXT    NOT NULL,
-  created_at  TEXT    NOT NULL
+  id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  table_no       INTEGER NOT NULL,
+  note           TEXT    NOT NULL DEFAULT '',
+  photo_path     TEXT    NOT NULL,
+  thumb_path     TEXT    NOT NULL,
+  status         TEXT    NOT NULL DEFAULT 'pending',
+  decline_reason TEXT,
+  shift_id       TEXT    NOT NULL,
+  created_at     TEXT    NOT NULL
 );
 CREATE TABLE IF NOT EXISTS feedback (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -18,18 +19,21 @@ CREATE TABLE IF NOT EXISTS feedback (
   created_at  TEXT    NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_posts_shift ON posts(shift_id);
+CREATE INDEX IF NOT EXISTS idx_posts_table_shift ON posts(table_no, shift_id);
 CREATE INDEX IF NOT EXISTS idx_feedback_post ON feedback(post_id);
 `;
 
-/**
- * Open a SnapBox database. Pass ':memory:' for an isolated in-memory DB (tests).
- * Returns a small data-access object; no globals, so every caller/test is isolated.
- */
 export function createDb(location = ':memory:') {
   const db = new Database(location);
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
   db.exec(SCHEMA);
+
+  // Migration for databases created before decline_reason existed.
+  const cols = db.prepare('PRAGMA table_info(posts)').all().map((c) => c.name);
+  if (!cols.includes('decline_reason')) {
+    db.exec('ALTER TABLE posts ADD COLUMN decline_reason TEXT');
+  }
 
   const stmts = {
     insertPost: db.prepare(
@@ -40,14 +44,16 @@ export function createDb(location = ':memory:') {
     listByShift: db.prepare(
       'SELECT * FROM posts WHERE shift_id = ? ORDER BY datetime(created_at) DESC, id DESC'
     ),
+    listByTableShift: db.prepare(
+      'SELECT * FROM posts WHERE table_no = ? AND shift_id = ? ORDER BY datetime(created_at) DESC, id DESC'
+    ),
     fbForPost: db.prepare(
       'SELECT * FROM feedback WHERE post_id = ? ORDER BY datetime(created_at) ASC, id ASC'
     ),
-    setStatus: db.prepare('UPDATE posts SET status = ? WHERE id = ?'),
+    approve: db.prepare("UPDATE posts SET status = 'approved', decline_reason = NULL WHERE id = ?"),
+    decline: db.prepare("UPDATE posts SET status = 'declined', decline_reason = ? WHERE id = ?"),
     deletePost: db.prepare('DELETE FROM posts WHERE id = ?'),
-    insertFb: db.prepare(
-      'INSERT INTO feedback (post_id, text, created_at) VALUES (?, ?, ?)'
-    ),
+    insertFb: db.prepare('INSERT INTO feedback (post_id, text, created_at) VALUES (?, ?, ?)'),
     getFb: db.prepare('SELECT * FROM feedback WHERE id = ?'),
     fbForTableShift: db.prepare(
       `SELECT f.* FROM feedback f
@@ -57,8 +63,11 @@ export function createDb(location = ':memory:') {
     ),
   };
 
-  function getPost(id) {
-    return stmts.getPost.get(id);
+  const getPost = (id) => stmts.getPost.get(id);
+
+  function withFeedback(posts) {
+    for (const p of posts) p.feedback = stmts.fbForPost.all(p.id);
+    return posts;
   }
 
   function createPost(o) {
@@ -73,41 +82,26 @@ export function createDb(location = ':memory:') {
     return getPost(info.lastInsertRowid);
   }
 
-  function listPostsByShift(shift_id) {
-    const posts = stmts.listByShift.all(shift_id);
-    for (const p of posts) p.feedback = stmts.fbForPost.all(p.id);
-    return posts;
-  }
-
-  function setStatus(id, status) {
-    return stmts.setStatus.run(status, id).changes > 0;
-  }
-
-  function deletePost(id) {
-    const row = getPost(id);
-    if (!row) return null;
-    stmts.deletePost.run(id); // feedback removed via ON DELETE CASCADE
-    return row;
-  }
-
-  function addFeedback(post_id, text, created_at) {
-    const info = stmts.insertFb.run(post_id, text, created_at);
-    return stmts.getFb.get(info.lastInsertRowid);
-  }
-
-  function listFeedbackForTableShift(table_no, shift_id) {
-    return stmts.fbForTableShift.all(table_no, shift_id);
-  }
-
   return {
     raw: db,
     createPost,
     getPost,
-    listPostsByShift,
-    setStatus,
-    deletePost,
-    addFeedback,
-    listFeedbackForTableShift,
+    listPostsByShift: (shift_id) => withFeedback(stmts.listByShift.all(shift_id)),
+    listPostsByTableShift: (table_no, shift_id) =>
+      withFeedback(stmts.listByTableShift.all(table_no, shift_id)),
+    approve: (id) => stmts.approve.run(id).changes > 0,
+    decline: (id, reason) => stmts.decline.run(reason, id).changes > 0,
+    deletePost: (id) => {
+      const row = getPost(id);
+      if (!row) return null;
+      stmts.deletePost.run(id); // feedback removed via ON DELETE CASCADE
+      return row;
+    },
+    addFeedback: (post_id, text, created_at) => {
+      const info = stmts.insertFb.run(post_id, text, created_at);
+      return stmts.getFb.get(info.lastInsertRowid);
+    },
+    listFeedbackForTableShift: (table_no, shift_id) => stmts.fbForTableShift.all(table_no, shift_id),
     close: () => db.close(),
   };
 }

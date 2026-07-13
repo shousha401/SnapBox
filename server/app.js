@@ -53,8 +53,8 @@ export function createApp(opts) {
   }
 
   // --- pages ---
-  app.get('/', (_req, res) => res.redirect('/hub'));
   if (publicDir) {
+    app.get('/', (_req, res) => res.sendFile(path.join(publicDir, 'landing.html')));
     app.get('/hub', (_req, res) => res.sendFile(path.join(publicDir, 'hub.html')));
     app.get('/table/:n', (_req, res) => res.sendFile(path.join(publicDir, 'table.html')));
   }
@@ -108,13 +108,32 @@ export function createApp(opts) {
     res.json({ shift_id: shift, posts: db.listPostsByShift(shift) });
   });
 
+  // status changes go to the hub AND to the worker's own tablet
+  const toHubAndTable = (tableNo) => (m) =>
+    m.role === 'hub' || (m.role === 'table' && Number(m.tableNo) === tableNo);
+
   // --- approve ---
   app.post('/api/posts/:id/approve', requirePin, (req, res) => {
     const id = Number(req.params.id);
-    if (!db.getPost(id)) return res.status(404).json({ error: 'not_found' });
-    db.setStatus(id, 'approved');
-    sse.send('post:update', { id, status: 'approved' }, (m) => m.role === 'hub');
-    res.json({ id, status: 'approved' });
+    const post = db.getPost(id);
+    if (!post) return res.status(404).json({ error: 'not_found' });
+    db.approve(id);
+    const payload = { id, status: 'approved', table_no: post.table_no, decline_reason: null };
+    sse.send('post:update', payload, toHubAndTable(post.table_no));
+    res.json(payload);
+  });
+
+  // --- decline (reason required) ---
+  app.post('/api/posts/:id/decline', requirePin, (req, res) => {
+    const id = Number(req.params.id);
+    const post = db.getPost(id);
+    if (!post) return res.status(404).json({ error: 'not_found' });
+    const reason = String(req.body.reason || '').trim().slice(0, 1000);
+    if (!reason) return res.status(400).json({ error: 'reason_required' });
+    db.decline(id, reason);
+    const payload = { id, status: 'declined', table_no: post.table_no, decline_reason: reason };
+    sse.send('post:update', payload, toHubAndTable(post.table_no));
+    res.json(payload);
   });
 
   // --- delete ---
@@ -145,6 +164,13 @@ export function createApp(opts) {
       (m) => m.role === 'hub' || (m.role === 'table' && Number(m.tableNo) === post.table_no)
     );
     res.status(201).json(payload);
+  });
+
+  // --- a table's own posts for the current shift (tablet list + persistence) ---
+  app.get('/api/table/:n/posts', (req, res) => {
+    const n = Number(req.params.n);
+    const shift = shiftIdFor(now(), shiftStarts);
+    res.json({ table_no: n, shift_id: shift, posts: db.listPostsByTableShift(n, shift) });
   });
 
   // --- a table's feedback for the current shift (tablet initial load + fallback) ---

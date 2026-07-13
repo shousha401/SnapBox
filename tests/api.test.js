@@ -115,9 +115,48 @@ describe('supervisor actions are PIN-gated', () => {
     expect(tf.body.feedback[0].text).toBe('please redo');
   });
 
+  it('declines with a reason and rejects a decline with no reason', async () => {
+    const { body } = await post(1);
+    const noReason = await request(app)
+      .post(`/api/posts/${body.id}/decline`)
+      .set('x-snapbox-pin', PIN)
+      .send({ reason: '   ' });
+    expect(noReason.status).toBe(400);
+    expect(noReason.body.error).toBe('reason_required');
+
+    const ok = await request(app)
+      .post(`/api/posts/${body.id}/decline`)
+      .set('x-snapbox-pin', PIN)
+      .send({ reason: 'photo too blurry' });
+    expect(ok.status).toBe(200);
+    expect(ok.body).toMatchObject({ status: 'declined', decline_reason: 'photo too blurry', table_no: 1 });
+
+    const list = await request(app).get('/api/posts');
+    const stored = list.body.posts.find((p) => p.id === body.id);
+    expect(stored.status).toBe('declined');
+    expect(stored.decline_reason).toBe('photo too blurry');
+  });
+
+  it('requires the PIN to decline', async () => {
+    const { body } = await post(1);
+    const res = await request(app).post(`/api/posts/${body.id}/decline`).send({ reason: 'x' });
+    expect(res.status).toBe(401);
+  });
+
   it('returns 404 for actions on a missing post', async () => {
     const res = await request(app).post('/api/posts/999/approve').set('x-snapbox-pin', PIN);
     expect(res.status).toBe(404);
+  });
+});
+
+describe('GET /api/table/:n/posts', () => {
+  it('returns only the given table\'s posts for the current shift', async () => {
+    const a = await post(2, 'one');
+    await post(3, 'other table');
+    const res = await request(app).get('/api/table/2/posts');
+    expect(res.body.table_no).toBe(2);
+    expect(res.body.posts).toHaveLength(1);
+    expect(res.body.posts[0].id).toBe(a.body.id);
   });
 });
 
@@ -164,9 +203,10 @@ describe('static pages', () => {
     expect((await request(pagesApp).get('/styles.css')).status).toBe(200);
   });
 
-  it('redirects root to the hub', async () => {
-    const res = await request(pagesApp).get('/').redirects(0);
-    expect(res.status).toBe(302);
-    expect(res.headers.location).toBe('/hub');
+  it('serves the landing / role picker at root', async () => {
+    const res = await request(pagesApp).get('/');
+    expect(res.status).toBe(200);
+    expect(res.text).toContain('Warehouse Tablet');
+    expect(res.text).toContain('Manager Hub');
   });
 });

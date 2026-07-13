@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>SnapBox</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body class="landing">
+  <header><h1>SnapBox <span class="tag">📦</span></h1></header>
+  <main>
+    <div class="choice-grid" id="choiceGrid">
+      <button class="choice-card" id="chooseTablet">
+        <span class="ic">📦</span>
+        <span class="t">Warehouse Tablet</span>
+        <span class="d">Snap a photo on a line</span>
+      </button>
+      <button class="choice-card" id="chooseManager">
+        <span class="ic">🖥️</span>
+        <span class="t">Manager Hub</span>
+        <span class="d">Review, approve &amp; decline</span>
+      </button>
+    </div>
+
+    <div class="line-pick" id="linePick" hidden>
+      <h2>Which line are you on?</h2>
+      <div class="line-grid" id="lineGrid"></div>
+      <button class="back" id="backBtn">← Back</button>
+    </div>
+  </main>
+  <script src="/landing.js"></script>
+</body>
+</html>

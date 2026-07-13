@@ -1,5 +1,5 @@
-// Hub page: live board of posts grouped by table. Supervisors approve, delete,
-// or send feedback. Live updates arrive over SSE; actions are PIN-gated.
+// Hub page: live board of posts grouped by table. Supervisors approve, decline
+// (with a required reason), send feedback, or delete. Live over SSE; PIN-gated.
 const board = document.getElementById('board');
 const pinInput = document.getElementById('pin');
 const hubStatus = document.getElementById('hubStatus');
@@ -7,10 +7,8 @@ const lightbox = document.getElementById('lightbox');
 const lightboxImg = document.getElementById('lightboxImg');
 
 let tableCount = 4;
-let pinRequired = false;
-const cards = new Map(); // post id -> { el, fbUl }
+const cards = new Map(); // post id -> { el, fbUl, badge, reason }
 
-// ---- PIN persistence (session only) ----
 pinInput.value = sessionStorage.getItem('snapbox_pin') || '';
 pinInput.addEventListener('input', () => sessionStorage.setItem('snapbox_pin', pinInput.value));
 
@@ -19,7 +17,6 @@ function setHubStatus(text, kind = '') {
   hubStatus.className = 'status' + (kind ? ' ' + kind : '');
   if (text) setTimeout(() => { if (hubStatus.textContent === text) hubStatus.textContent = ''; }, 3500);
 }
-
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])
@@ -29,8 +26,10 @@ function fmtTime(iso) {
   const d = new Date(iso);
   return isNaN(d) ? '' : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
+function statusLabel(s) {
+  return s === 'approved' ? 'approved' : s === 'declined' ? 'declined' : 'pending';
+}
 
-// ---- server actions ----
 async function action(method, url, body) {
   const headers = {};
   const p = pinInput.value.trim();
@@ -49,7 +48,6 @@ async function action(method, url, body) {
   return r.json();
 }
 
-// ---- board layout ----
 function buildColumns() {
   board.innerHTML = '';
   for (let i = 1; i <= tableCount; i++) {
@@ -73,7 +71,7 @@ function toggleEmpty(colBody) {
 
 function buildCard(p) {
   const el = document.createElement('article');
-  el.className = 'card' + (p.status === 'approved' ? ' approved' : '');
+  el.className = 'card ' + p.status;
   el.dataset.id = p.id;
 
   const img = document.createElement('img');
@@ -88,39 +86,62 @@ function buildCard(p) {
 
   const meta = document.createElement('div');
   meta.className = 'meta';
-  meta.innerHTML = `<span>${fmtTime(p.created_at)}</span><span class="badge ${p.status}">${p.status}</span>`;
+  const badge = document.createElement('span');
+  badge.className = 'badge ' + p.status;
+  badge.textContent = statusLabel(p.status);
+  meta.innerHTML = `<span>${fmtTime(p.created_at)}</span>`;
+  meta.appendChild(badge);
 
   const note = document.createElement('div');
   note.className = 'note' + (p.note ? '' : ' empty');
   note.textContent = p.note || 'No note';
 
+  const reason = document.createElement('div');
+  reason.className = 'reason';
+  reason.hidden = p.status !== 'declined' || !p.decline_reason;
+  if (!reason.hidden) reason.textContent = 'Declined: ' + p.decline_reason;
+
   const fbUl = document.createElement('ul');
   fbUl.className = 'fb';
   (p.feedback || []).forEach((f) => appendFeedback(fbUl, f));
 
-  const row = document.createElement('div');
-  row.className = 'row';
-  const approve = document.createElement('button');
-  approve.className = 'approve';
-  approve.textContent = '✓ Approve';
-  approve.addEventListener('click', () => action('POST', `/api/posts/${p.id}/approve`).catch(() => {}));
-  const fb = document.createElement('button');
-  fb.textContent = '✎ Feedback';
-  fb.addEventListener('click', () => {
-    const text = prompt(`Feedback to Table ${p.table_no}:`);
-    if (text && text.trim()) action('POST', `/api/posts/${p.id}/feedback`, { text: text.trim() }).catch(() => {});
+  const row1 = document.createElement('div');
+  row1.className = 'row';
+  const approve = mkBtn('approve', '✓ Approve', () =>
+    action('POST', `/api/posts/${p.id}/approve`).catch(() => {})
+  );
+  const decline = mkBtn('decline', '✗ Decline', () => {
+    const reasonText = prompt(`Reason for declining (Table ${p.table_no}):`);
+    if (reasonText && reasonText.trim()) {
+      action('POST', `/api/posts/${p.id}/decline`, { reason: reasonText.trim() }).catch(() => {});
+    }
   });
-  const del = document.createElement('button');
-  del.className = 'danger';
-  del.textContent = '🗑';
-  del.addEventListener('click', () => {
+  row1.append(approve, decline);
+
+  const row2 = document.createElement('div');
+  row2.className = 'row';
+  const fb = mkBtn('', '✎ Feedback', () => {
+    const text = prompt(`Feedback to Table ${p.table_no}:`);
+    if (text && text.trim()) {
+      action('POST', `/api/posts/${p.id}/feedback`, { text: text.trim() }).catch(() => {});
+    }
+  });
+  const del = mkBtn('danger', '🗑', () => {
     if (confirm('Delete this post?')) action('DELETE', `/api/posts/${p.id}`).catch(() => {});
   });
-  row.append(approve, fb, del);
+  row2.append(fb, del);
 
-  body.append(meta, note, fbUl, row);
+  body.append(meta, note, reason, fbUl, row1, row2);
   el.append(img, body);
-  return { el, fbUl };
+  return { el, fbUl, badge, reason };
+}
+
+function mkBtn(cls, label, onClick) {
+  const b = document.createElement('button');
+  if (cls) b.className = cls;
+  b.textContent = label;
+  b.addEventListener('click', onClick);
+  return b;
 }
 
 function appendFeedback(fbUl, f) {
@@ -131,8 +152,7 @@ function appendFeedback(fbUl, f) {
 
 function renderPost(p, atTop) {
   const colBody = document.getElementById('col-' + p.table_no);
-  if (!colBody) return; // table out of range
-  if (cards.has(p.id)) return; // already shown
+  if (!colBody || cards.has(p.id)) return;
   const card = buildCard(p);
   cards.set(p.id, card);
   if (atTop) colBody.insertBefore(card.el, colBody.firstChild);
@@ -140,18 +160,24 @@ function renderPost(p, atTop) {
   toggleEmpty(colBody);
 }
 
-// ---- SSE live updates ----
+function applyStatus(u) {
+  const card = cards.get(u.id);
+  if (!card) return;
+  card.el.className = 'card ' + u.status;
+  card.badge.className = 'badge ' + u.status;
+  card.badge.textContent = statusLabel(u.status);
+  if (u.status === 'declined' && u.decline_reason) {
+    card.reason.textContent = 'Declined: ' + u.decline_reason;
+    card.reason.hidden = false;
+  } else {
+    card.reason.hidden = true;
+  }
+}
+
 function connect() {
   const es = new EventSource('/api/stream?role=hub');
   es.addEventListener('post:new', (e) => renderPost(JSON.parse(e.data), true));
-  es.addEventListener('post:update', (e) => {
-    const { id, status } = JSON.parse(e.data);
-    const card = cards.get(id);
-    if (!card) return;
-    card.el.classList.toggle('approved', status === 'approved');
-    const badge = card.el.querySelector('.badge');
-    if (badge) { badge.textContent = status; badge.className = 'badge ' + status; }
-  });
+  es.addEventListener('post:update', (e) => applyStatus(JSON.parse(e.data)));
   es.addEventListener('post:deleted', (e) => {
     const { id } = JSON.parse(e.data);
     const card = cards.get(id);
@@ -171,7 +197,6 @@ function connect() {
   es.onopen = () => setHubStatus('');
 }
 
-// ---- lightbox ----
 function openLightbox(src) {
   lightboxImg.src = src;
   lightbox.hidden = false;
@@ -179,19 +204,17 @@ function openLightbox(src) {
 document.getElementById('lightboxClose').addEventListener('click', () => (lightbox.hidden = true));
 lightbox.addEventListener('click', (e) => { if (e.target === lightbox) lightbox.hidden = true; });
 
-// ---- boot ----
 async function init() {
   try {
     const cfg = await (await fetch('/api/config')).json();
     tableCount = cfg.tableCount || 4;
-    pinRequired = !!cfg.pinRequired;
   } catch {
-    /* use defaults */
+    /* defaults */
   }
   buildColumns();
   try {
     const d = await (await fetch('/api/posts?shift=current')).json();
-    (d.posts || []).forEach((p) => renderPost(p, false)); // list is newest-first
+    (d.posts || []).forEach((p) => renderPost(p, false));
   } catch {
     setHubStatus('Could not load posts', 'err');
   }

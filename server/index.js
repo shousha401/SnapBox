@@ -18,10 +18,10 @@ const app = createApp({
 });
 
 const server = app.listen(config.port, () => {
-  const tables = Array.from({ length: config.tableCount }, (_, i) => i + 1).join('..');
   console.log(`SnapBox listening on http://0.0.0.0:${config.port}`);
+  console.log(`  start  -> /`);
   console.log(`  hub    -> /hub`);
-  console.log(`  tables -> /table/${tables}`);
+  console.log(`  tables -> /table/1 .. /table/${config.tableCount}`);
   if (!config.pin) {
     console.log('  WARNING: SNAPBOX_PIN is not set — approve/delete/feedback are OPEN to the network.');
   }
