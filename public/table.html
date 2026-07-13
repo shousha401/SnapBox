@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>SnapBox — Table</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body class="tablet">
+  <header>
+    <h1 id="title">Table —</h1>
+    <span id="status" class="status"></span>
+  </header>
+  <main>
+    <div class="camera">
+      <video id="video" autoplay playsinline muted hidden></video>
+      <img id="preview" alt="Captured photo" hidden />
+      <span id="hint" class="hint">Starting camera…</span>
+      <input id="fileInput" type="file" accept="image/*" capture="environment" hidden />
+      <canvas id="canvas" hidden></canvas>
+    </div>
+
+    <textarea id="note" placeholder="Add a note — what is this, any issue?" maxlength="1000"></textarea>
+
+    <div class="actions">
+      <button id="shoot" class="primary">📷 Take photo</button>
+      <button id="retake" hidden>↺ Retake</button>
+      <button id="send" class="send" disabled>Send ▸</button>
+    </div>
+
+    <section class="feedback">
+      <h2>Feedback for this table</h2>
+      <ul id="fbList"><li class="empty">No feedback yet.</li></ul>
+    </section>
+  </main>
+  <script src="/table.js"></script>
+</body>
+</html>

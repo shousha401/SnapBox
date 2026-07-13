@@ -1,0 +1,178 @@
+import { describe, it, expect, beforeAll, beforeEach, afterEach } from 'vitest';
+import request from 'supertest';
+import sharp from 'sharp';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { createApp } from '../server/app.js';
+import { createDb } from '../server/db.js';
+
+const publicDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../public');
+
+const PIN = '4242';
+const FIXED = new Date(2026, 6, 13, 10, 0); // 2026-07-13 10:00 local -> shift '2026-07-13'
+
+let img; // a small valid JPEG buffer
+beforeAll(async () => {
+  img = await sharp({
+    create: { width: 16, height: 16, channels: 3, background: { r: 200, g: 40, b: 40 } },
+  })
+    .jpeg()
+    .toBuffer();
+});
+
+let db, uploadsDir, app;
+beforeEach(() => {
+  db = createDb(':memory:');
+  uploadsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'snapbox-test-'));
+  app = createApp({
+    db,
+    uploadsDir,
+    publicDir: null,
+    pin: PIN,
+    tableCount: 4,
+    shiftStarts: [0],
+    now: () => FIXED,
+  });
+});
+afterEach(() => {
+  db.close();
+  fs.rmSync(uploadsDir, { recursive: true, force: true });
+});
+
+function post(tableNo = 2, note = 'check this') {
+  return request(app)
+    .post('/api/posts')
+    .field('table_no', String(tableNo))
+    .field('note', note)
+    .attach('photo', img, 'snap.jpg');
+}
+
+describe('POST /api/posts', () => {
+  it('accepts a photo + note and stores it in the current shift', async () => {
+    const res = await post(2, 'label torn');
+    expect(res.status).toBe(201);
+    expect(res.body).toMatchObject({ table_no: 2, note: 'label torn', status: 'pending' });
+    expect(res.body.photo_path).toMatch(/^\/uploads\//);
+    expect(fs.existsSync(path.join(uploadsDir, path.basename(res.body.photo_path)))).toBe(true);
+
+    const list = await request(app).get('/api/posts?shift=current');
+    expect(list.body.shift_id).toBe('2026-07-13');
+    expect(list.body.posts).toHaveLength(1);
+    expect(list.body.posts[0].id).toBe(res.body.id);
+  });
+
+  it('rejects a missing photo', async () => {
+    const res = await request(app).post('/api/posts').field('table_no', '1');
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('photo_required');
+  });
+
+  it('rejects an out-of-range table', async () => {
+    const res = await post(9);
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('bad_table');
+  });
+});
+
+describe('supervisor actions are PIN-gated', () => {
+  it('rejects approve without the PIN', async () => {
+    const { body } = await post();
+    const res = await request(app).post(`/api/posts/${body.id}/approve`);
+    expect(res.status).toBe(401);
+  });
+
+  it('approves with the PIN', async () => {
+    const { body } = await post();
+    const res = await request(app)
+      .post(`/api/posts/${body.id}/approve`)
+      .set('x-snapbox-pin', PIN);
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe('approved');
+    expect(db.getPost(body.id).status).toBe('approved');
+  });
+
+  it('deletes with the PIN and removes it from the feed', async () => {
+    const { body } = await post();
+    const del = await request(app).delete(`/api/posts/${body.id}`).set('x-snapbox-pin', PIN);
+    expect(del.status).toBe(200);
+    const list = await request(app).get('/api/posts');
+    expect(list.body.posts).toHaveLength(0);
+  });
+
+  it('adds feedback and rejects empty feedback', async () => {
+    const { body } = await post(3);
+    const empty = await request(app)
+      .post(`/api/posts/${body.id}/feedback`)
+      .set('x-snapbox-pin', PIN)
+      .send({ text: '   ' });
+    expect(empty.status).toBe(400);
+
+    const ok = await request(app)
+      .post(`/api/posts/${body.id}/feedback`)
+      .set('x-snapbox-pin', PIN)
+      .send({ text: 'please redo' });
+    expect(ok.status).toBe(201);
+    expect(ok.body).toMatchObject({ text: 'please redo', table_no: 3 });
+
+    const tf = await request(app).get('/api/table/3/feedback');
+    expect(tf.body.feedback).toHaveLength(1);
+    expect(tf.body.feedback[0].text).toBe('please redo');
+  });
+
+  it('returns 404 for actions on a missing post', async () => {
+    const res = await request(app).post('/api/posts/999/approve').set('x-snapbox-pin', PIN);
+    expect(res.status).toBe(404);
+  });
+});
+
+describe('open mode (no PIN configured)', () => {
+  it('allows approve without a PIN when pin is empty', async () => {
+    const openApp = createApp({
+      db,
+      uploadsDir,
+      publicDir: null,
+      pin: '',
+      tableCount: 4,
+      now: () => FIXED,
+    });
+    const { body } = await request(openApp)
+      .post('/api/posts')
+      .field('table_no', '1')
+      .attach('photo', img, 'snap.jpg');
+    const res = await request(openApp).post(`/api/posts/${body.id}/approve`);
+    expect(res.status).toBe(200);
+  });
+});
+
+describe('GET /api/config', () => {
+  it('reports table count and whether a PIN is required', async () => {
+    const res = await request(app).get('/api/config');
+    expect(res.body).toEqual({ tableCount: 4, pinRequired: true });
+  });
+});
+
+describe('static pages', () => {
+  let pagesApp;
+  beforeEach(() => {
+    pagesApp = createApp({ db, uploadsDir, publicDir, pin: PIN, tableCount: 4, now: () => FIXED });
+  });
+
+  it('serves the hub page', async () => {
+    const res = await request(pagesApp).get('/hub');
+    expect(res.status).toBe(200);
+    expect(res.text).toContain('SnapBox');
+  });
+
+  it('serves the tablet page and the stylesheet', async () => {
+    expect((await request(pagesApp).get('/table/2')).status).toBe(200);
+    expect((await request(pagesApp).get('/styles.css')).status).toBe(200);
+  });
+
+  it('redirects root to the hub', async () => {
+    const res = await request(pagesApp).get('/').redirects(0);
+    expect(res.status).toBe(302);
+    expect(res.headers.location).toBe('/hub');
+  });
+});
