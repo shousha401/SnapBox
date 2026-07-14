@@ -18,7 +18,10 @@ network can see.
   feedback lands on the tablet instantly.
 - **Shifts** — the hub shows the *current shift* only, but nothing is deleted on a
   shift boundary; everything stays in the database (`shift_id` is just a view
-  filter). A history/look-back view is a planned follow-up.
+  filter).
+- **History** — `/history` on manager PCs. Browse any past day, filter by line and
+  by status, click a photo to enlarge. Read-only; the live board at `/hub` is
+  where you act on things.
 
 ## Run it
 
@@ -63,6 +66,8 @@ pm2 save
 | `DELETE` | `/api/posts/:id`               | 🔒 PIN                            |
 | `POST`   | `/api/posts/:id/feedback`      | 🔒 PIN — `{ text }`              |
 | `GET`    | `/api/table/:n/feedback`       | this table's feedback, this shift |
+| `GET`    | `/api/history?date=YYYY-MM-DD` | every post on a calendar date    |
+| `GET`    | `/api/history/dates`           | days that have posts + counts    |
 | `GET`    | `/api/stream?role=hub\|table`  | SSE live updates                 |
 
 ## Tests

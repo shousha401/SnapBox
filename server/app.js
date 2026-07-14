@@ -56,6 +56,7 @@ export function createApp(opts) {
   if (publicDir) {
     app.get('/', (_req, res) => res.sendFile(path.join(publicDir, 'landing.html')));
     app.get('/hub', (_req, res) => res.sendFile(path.join(publicDir, 'hub.html')));
+    app.get('/history', (_req, res) => res.sendFile(path.join(publicDir, 'history.html')));
     app.get('/table/:n', (_req, res) => res.sendFile(path.join(publicDir, 'table.html')));
   }
 
@@ -164,6 +165,18 @@ export function createApp(opts) {
       (m) => m.role === 'hub' || (m.role === 'table' && Number(m.tableNo) === post.table_no)
     );
     res.status(201).json(payload);
+  });
+
+  // --- history: which days have posts, with per-day counts ---
+  app.get('/api/history/dates', (_req, res) => {
+    res.json({ dates: db.listHistoryDates() });
+  });
+
+  // --- history: every post on a given calendar date ---
+  app.get('/api/history', (req, res) => {
+    const date = String(req.query.date || '').slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ error: 'bad_date' });
+    res.json({ date, posts: db.listPostsByDate(date) });
   });
 
   // --- a table's own posts for the current shift (tablet list + persistence) ---

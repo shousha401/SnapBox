@@ -179,6 +179,44 @@ describe('open mode (no PIN configured)', () => {
   });
 });
 
+describe('history endpoints', () => {
+  it('returns every post on a date, across lines', async () => {
+    const a = await post(1, 'line one');
+    const b = await post(4, 'line four');
+    const res = await request(app).get('/api/history?date=2026-07-13');
+    expect(res.status).toBe(200);
+    expect(res.body.date).toBe('2026-07-13');
+    expect(res.body.posts.map((p) => p.id).sort()).toEqual([a.body.id, b.body.id].sort());
+  });
+
+  it('returns nothing for a day with no posts', async () => {
+    await post(1);
+    const res = await request(app).get('/api/history?date=2020-01-01');
+    expect(res.status).toBe(200);
+    expect(res.body.posts).toEqual([]);
+  });
+
+  it('rejects a malformed date', async () => {
+    const res = await request(app).get('/api/history?date=not-a-date');
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('bad_date');
+  });
+
+  it('lists days with per-status counts', async () => {
+    const a = await post(2);
+    await post(2);
+    await request(app).post(`/api/posts/${a.body.id}/approve`).set('x-snapbox-pin', PIN);
+
+    const res = await request(app).get('/api/history/dates');
+    expect(res.body.dates[0]).toMatchObject({
+      date: '2026-07-13',
+      total: 2,
+      approved: 1,
+      pending: 1,
+    });
+  });
+});
+
 describe('GET /api/config', () => {
   it('reports table count and whether a PIN is required', async () => {
     const res = await request(app).get('/api/config');
@@ -201,6 +239,12 @@ describe('static pages', () => {
   it('serves the tablet page and the stylesheet', async () => {
     expect((await request(pagesApp).get('/table/2')).status).toBe(200);
     expect((await request(pagesApp).get('/styles.css')).status).toBe(200);
+  });
+
+  it('serves the history page', async () => {
+    const res = await request(pagesApp).get('/history');
+    expect(res.status).toBe(200);
+    expect(res.text).toContain('history');
   });
 
   it('serves the landing / role picker at root', async () => {

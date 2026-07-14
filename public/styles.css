@@ -177,6 +177,39 @@ body.landing main { max-width: 720px; margin: 0 auto; padding: 32px 16px; }
 .sub-fb { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
 .sub-fb li { background: #fff8ec; border-left: 3px solid var(--warn); padding: 5px 8px; border-radius: 6px; font-size: 13px; }
 
+/* ---------------- History page ---------------- */
+.navlink {
+  text-decoration: none; font-size: 14px; font-weight: 600; color: var(--accent-ink);
+  background: #d7f0eb; padding: 8px 12px; border-radius: 10px; white-space: nowrap;
+}
+.navlink:hover { background: #c3e8e1; }
+body.history main { padding: 16px; max-width: 1400px; margin: 0 auto; }
+.controls { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; margin-bottom: 14px; }
+.controls label { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 7px; font-weight: 600; }
+.controls input, .controls select {
+  font: inherit; font-size: 14px; padding: 8px 10px; border: 1px solid var(--line);
+  border-radius: 10px; background: var(--surface); color: var(--ink);
+}
+.days { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 10px; margin-bottom: 12px; }
+.day-chip {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+  padding: 8px 12px; border-radius: 10px; border: 1px solid var(--line);
+  background: var(--surface); cursor: pointer; white-space: nowrap; flex: none;
+}
+.day-chip:hover { border-color: var(--accent); }
+.day-chip.active { border-color: var(--accent); background: #d7f0eb; }
+.day-date { font-size: 13px; font-weight: 700; }
+.day-count { font-size: 11px; color: var(--muted); }
+.summary { font-size: 14px; color: var(--muted); margin-bottom: 14px; }
+.pill { font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 999px; }
+.pill.approved { background: #d7f0eb; color: var(--accent-ink); }
+.pill.declined { background: #fbe0e0; color: #8a1f1f; }
+.pill.pending { background: #fdecc8; color: #8a5a00; }
+.history-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 12px; align-items: start;
+}
+
 /* ---------------- Decline states ---------------- */
 .badge.declined { background: #fbe0e0; color: #8a1f1f; }
 .card.declined { border-color: #f0c9c9; }

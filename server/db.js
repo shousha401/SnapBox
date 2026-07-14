@@ -47,6 +47,21 @@ export function createDb(location = ':memory:') {
     listByTableShift: db.prepare(
       'SELECT * FROM posts WHERE table_no = ? AND shift_id = ? ORDER BY datetime(created_at) DESC, id DESC'
     ),
+    // shift_id is 'YYYY-MM-DD' (or 'YYYY-MM-DD#N' when multi-shift), so the
+    // first 10 chars are always the local calendar date.
+    listByDate: db.prepare(
+      'SELECT * FROM posts WHERE substr(shift_id, 1, 10) = ? ORDER BY datetime(created_at) DESC, id DESC'
+    ),
+    historyDates: db.prepare(
+      `SELECT substr(shift_id, 1, 10) AS date,
+              COUNT(*) AS total,
+              SUM(CASE WHEN status = 'pending'  THEN 1 ELSE 0 END) AS pending,
+              SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END) AS approved,
+              SUM(CASE WHEN status = 'declined' THEN 1 ELSE 0 END) AS declined
+       FROM posts
+       GROUP BY date
+       ORDER BY date DESC`
+    ),
     fbForPost: db.prepare(
       'SELECT * FROM feedback WHERE post_id = ? ORDER BY datetime(created_at) ASC, id ASC'
     ),
@@ -89,6 +104,8 @@ export function createDb(location = ':memory:') {
     listPostsByShift: (shift_id) => withFeedback(stmts.listByShift.all(shift_id)),
     listPostsByTableShift: (table_no, shift_id) =>
       withFeedback(stmts.listByTableShift.all(table_no, shift_id)),
+    listPostsByDate: (date) => withFeedback(stmts.listByDate.all(date)),
+    listHistoryDates: () => stmts.historyDates.all(),
     approve: (id) => stmts.approve.run(id).changes > 0,
     decline: (id, reason) => stmts.decline.run(reason, id).changes > 0,
     deletePost: (id) => {

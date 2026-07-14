@@ -88,6 +88,38 @@ describe('listPostsByTableShift', () => {
   });
 });
 
+describe('history', () => {
+  it('lists all posts on a calendar date, newest first, with feedback', () => {
+    const a = db.createPost(makePost({ table_no: 1, created_at: '2026-07-13T10:00:00.000Z' }));
+    const b = db.createPost(makePost({ table_no: 3, created_at: '2026-07-13T14:00:00.000Z' }));
+    db.createPost(makePost({ shift_id: '2026-07-12' })); // different day
+    db.addFeedback(a.id, 'redo', '2026-07-13T10:05:00.000Z');
+
+    const list = db.listPostsByDate('2026-07-13');
+    expect(list.map((p) => p.id)).toEqual([b.id, a.id]);
+    expect(list.find((p) => p.id === a.id).feedback).toHaveLength(1);
+  });
+
+  it('still groups by date when shift ids are multi-shift (YYYY-MM-DD#N)', () => {
+    db.createPost(makePost({ shift_id: '2026-07-13#0' }));
+    db.createPost(makePost({ shift_id: '2026-07-13#1' }));
+    expect(db.listPostsByDate('2026-07-13')).toHaveLength(2);
+  });
+
+  it('summarises each day with per-status counts, newest day first', () => {
+    const p1 = db.createPost(makePost({ shift_id: '2026-07-13' }));
+    const p2 = db.createPost(makePost({ shift_id: '2026-07-13' }));
+    db.createPost(makePost({ shift_id: '2026-07-13' })); // stays pending
+    db.createPost(makePost({ shift_id: '2026-07-12' }));
+    db.approve(p1.id);
+    db.decline(p2.id, 'blurry');
+
+    const dates = db.listHistoryDates();
+    expect(dates.map((d) => d.date)).toEqual(['2026-07-13', '2026-07-12']);
+    expect(dates[0]).toMatchObject({ total: 3, approved: 1, declined: 1, pending: 1 });
+  });
+});
+
 describe('feedback by table + shift', () => {
   it('returns only feedback for the given table and shift', () => {
     const t1 = db.createPost(makePost({ table_no: 1 }));

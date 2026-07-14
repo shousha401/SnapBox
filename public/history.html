@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SnapBox — History</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body class="history">
+  <header>
+    <h1>SnapBox <span class="tag">history</span></h1>
+    <div class="head-right">
+      <a href="/hub" class="navlink">← Back to hub</a>
+    </div>
+  </header>
+
+  <main>
+    <div class="controls">
+      <label>Date <input type="date" id="date" /></label>
+      <label>Line
+        <select id="line"><option value="">All lines</option></select>
+      </label>
+      <label>Status
+        <select id="status">
+          <option value="">All</option>
+          <option value="pending">Pending</option>
+          <option value="approved">Approved</option>
+          <option value="declined">Declined</option>
+        </select>
+      </label>
+    </div>
+
+    <div class="days" id="days"></div>
+
+    <div class="summary" id="summary"></div>
+
+    <div class="history-grid" id="grid"></div>
+    <div class="col-empty" id="empty" hidden>No photos on this day.</div>
+  </main>
+
+  <div id="lightbox" class="lightbox" hidden>
+    <img id="lightboxImg" alt="Full photo" />
+    <button id="lightboxClose" aria-label="Close">✕</button>
+  </div>
+
+  <script src="/history.js"></script>
+</body>
+</html>
