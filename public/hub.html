@@ -9,9 +9,10 @@
 <body class="hub">
   <header>
     <h1>SnapBox <span class="tag">hub</span></h1>
-    <div class="pinbox">
+    <div class="head-right">
+      <a href="/" class="navlink ghost">← Back</a>
       <a href="/history" class="navlink">🗂 History</a>
-      <input id="pin" type="password" placeholder="Supervisor PIN" autocomplete="off" />
+      <button id="lockBtn" class="lock locked">🔒 Locked</button>
       <span id="hubStatus" class="status"></span>
     </div>
   </header>
@@ -21,6 +22,20 @@
   <div id="lightbox" class="lightbox" hidden>
     <img id="lightboxImg" alt="Full photo" />
     <button id="lightboxClose" aria-label="Close">✕</button>
+  </div>
+
+  <div id="pinModal" class="modal" hidden>
+    <form class="modal-card" id="pinForm">
+      <h2>Supervisor PIN</h2>
+      <p class="modal-hint">Entered once — this device will remember it.</p>
+      <input id="pinInput" type="password" inputmode="numeric" enterkeyhint="go"
+             autocomplete="off" placeholder="••••" />
+      <p id="pinErr" class="pin-err" hidden>Wrong PIN — try again.</p>
+      <div class="modal-actions">
+        <button type="button" id="pinCancel">Cancel</button>
+        <button type="submit" class="send">Unlock</button>
+      </div>
+    </form>
   </div>
 
   <script src="/hub.js"></script>

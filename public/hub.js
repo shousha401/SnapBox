@@ -1,17 +1,72 @@
-// Hub page: live board of posts grouped by table. Supervisors approve, decline
-// (with a required reason), send feedback, or delete. Live over SSE; PIN-gated.
+// Hub page: live board of posts grouped by line. Managers approve, decline
+// (reason required), send feedback, or delete. Live over SSE; PIN-gated.
+//
+// PIN UX: stored in localStorage so it's typed once per device. If you act while
+// locked (or the PIN is wrong), a keypad pops up and — once unlocked — the action
+// you were trying to do is retried automatically. No re-tapping.
 const board = document.getElementById('board');
-const pinInput = document.getElementById('pin');
 const hubStatus = document.getElementById('hubStatus');
 const lightbox = document.getElementById('lightbox');
 const lightboxImg = document.getElementById('lightboxImg');
+const lockBtn = document.getElementById('lockBtn');
+const pinModal = document.getElementById('pinModal');
+const pinForm = document.getElementById('pinForm');
+const pinInput = document.getElementById('pinInput');
+const pinErr = document.getElementById('pinErr');
+const pinCancel = document.getElementById('pinCancel');
 
 let tableCount = 4;
+let pinRequired = false;
+let pendingAction = null; // what the manager was doing when we asked for the PIN
 const cards = new Map(); // post id -> { el, fbUl, badge, reason }
 
-pinInput.value = sessionStorage.getItem('snapbox_pin') || '';
-pinInput.addEventListener('input', () => sessionStorage.setItem('snapbox_pin', pinInput.value));
+// ---- PIN ----
+const getPin = () => localStorage.getItem('snapbox_pin') || '';
+function setPin(p) {
+  if (p) localStorage.setItem('snapbox_pin', p);
+  else localStorage.removeItem('snapbox_pin');
+  updateLock();
+}
+function updateLock() {
+  const unlocked = !!getPin();
+  lockBtn.className = 'lock ' + (unlocked ? 'unlocked' : 'locked');
+  lockBtn.textContent = unlocked ? '🔓 Unlocked' : '🔒 Locked';
+  lockBtn.hidden = !pinRequired;
+}
+function openPinModal(wrong) {
+  pinErr.hidden = !wrong;
+  pinInput.value = '';
+  pinModal.hidden = false;
+  setTimeout(() => pinInput.focus(), 50);
+}
+function closePinModal() {
+  pinModal.hidden = true;
+  pendingAction = null;
+}
 
+pinForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const p = pinInput.value.trim();
+  if (!p) return;
+  pinInput.blur(); // drop the on-screen keyboard before anything else happens
+  setPin(p);
+  pinModal.hidden = true;
+  const retry = pendingAction;
+  pendingAction = null;
+  if (retry) await retry(); // finish what they were doing
+});
+pinCancel.addEventListener('click', closePinModal);
+pinModal.addEventListener('click', (e) => { if (e.target === pinModal) closePinModal(); });
+
+lockBtn.addEventListener('click', () => {
+  if (getPin()) {
+    if (confirm('Lock SnapBox — forget the PIN on this device?')) setPin('');
+  } else {
+    openPinModal(false);
+  }
+});
+
+// ---- helpers ----
 function setHubStatus(text, kind = '') {
   hubStatus.textContent = text;
   hubStatus.className = 'status' + (kind ? ' ' + kind : '');
@@ -26,28 +81,40 @@ function fmtTime(iso) {
   const d = new Date(iso);
   return isNaN(d) ? '' : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
-function statusLabel(s) {
-  return s === 'approved' ? 'approved' : s === 'declined' ? 'declined' : 'pending';
-}
 
+// Never throws — on a missing/bad PIN it asks, then retries itself.
 async function action(method, url, body) {
+  if (pinRequired && !getPin()) {
+    pendingAction = () => action(method, url, body);
+    openPinModal(false);
+    return;
+  }
   const headers = {};
-  const p = pinInput.value.trim();
+  const p = getPin();
   if (p) headers['x-snapbox-pin'] = p;
   if (body) headers['Content-Type'] = 'application/json';
-  const r = await fetch(url, { method, headers, body: body ? JSON.stringify(body) : undefined });
+
+  let r;
+  try {
+    r = await fetch(url, { method, headers, body: body ? JSON.stringify(body) : undefined });
+  } catch {
+    setHubStatus('Network error', 'err');
+    return;
+  }
   if (r.status === 401) {
-    setHubStatus('Enter the supervisor PIN', 'err');
-    pinInput.focus();
-    throw new Error('pin');
+    setPin(''); // stored PIN is wrong — forget it and ask again
+    pendingAction = () => action(method, url, body);
+    openPinModal(true);
+    return;
   }
   if (!r.ok) {
     setHubStatus('Action failed', 'err');
-    throw new Error('http ' + r.status);
+    return;
   }
   return r.json();
 }
 
+// ---- board ----
 function buildColumns() {
   board.innerHTML = '';
   for (let i = 1; i <= tableCount; i++) {
@@ -69,6 +136,20 @@ function toggleEmpty(colBody) {
   }
 }
 
+function mkBtn(cls, label, onClick) {
+  const b = document.createElement('button');
+  if (cls) b.className = cls;
+  b.textContent = label;
+  b.addEventListener('click', onClick);
+  return b;
+}
+
+function appendFeedback(fbUl, f) {
+  const li = document.createElement('li');
+  li.innerHTML = `<strong>${fmtTime(f.created_at)}</strong> ${escapeHtml(f.text)}`;
+  fbUl.appendChild(li);
+}
+
 function buildCard(p) {
   const el = document.createElement('article');
   el.className = 'card ' + p.status;
@@ -88,7 +169,7 @@ function buildCard(p) {
   meta.className = 'meta';
   const badge = document.createElement('span');
   badge.className = 'badge ' + p.status;
-  badge.textContent = statusLabel(p.status);
+  badge.textContent = p.status;
   meta.innerHTML = `<span>${fmtTime(p.created_at)}</span>`;
   meta.appendChild(badge);
 
@@ -107,47 +188,29 @@ function buildCard(p) {
 
   const row1 = document.createElement('div');
   row1.className = 'row';
-  const approve = mkBtn('approve', '✓ Approve', () =>
-    action('POST', `/api/posts/${p.id}/approve`).catch(() => {})
+  row1.append(
+    mkBtn('approve', '✓ Approve', () => action('POST', `/api/posts/${p.id}/approve`)),
+    mkBtn('decline', '✗ Decline', () => {
+      const why = prompt(`Reason for declining (Line ${p.table_no}):`);
+      if (why && why.trim()) action('POST', `/api/posts/${p.id}/decline`, { reason: why.trim() });
+    })
   );
-  const decline = mkBtn('decline', '✗ Decline', () => {
-    const reasonText = prompt(`Reason for declining (Line ${p.table_no}):`);
-    if (reasonText && reasonText.trim()) {
-      action('POST', `/api/posts/${p.id}/decline`, { reason: reasonText.trim() }).catch(() => {});
-    }
-  });
-  row1.append(approve, decline);
 
   const row2 = document.createElement('div');
   row2.className = 'row';
-  const fb = mkBtn('', '✎ Feedback', () => {
-    const text = prompt(`Feedback to Line ${p.table_no}:`);
-    if (text && text.trim()) {
-      action('POST', `/api/posts/${p.id}/feedback`, { text: text.trim() }).catch(() => {});
-    }
-  });
-  const del = mkBtn('danger', '🗑', () => {
-    if (confirm('Delete this post?')) action('DELETE', `/api/posts/${p.id}`).catch(() => {});
-  });
-  row2.append(fb, del);
+  row2.append(
+    mkBtn('', '✎ Feedback', () => {
+      const text = prompt(`Feedback to Line ${p.table_no}:`);
+      if (text && text.trim()) action('POST', `/api/posts/${p.id}/feedback`, { text: text.trim() });
+    }),
+    mkBtn('danger', '🗑', () => {
+      if (confirm('Delete this post?')) action('DELETE', `/api/posts/${p.id}`);
+    })
+  );
 
   body.append(meta, note, reason, fbUl, row1, row2);
   el.append(img, body);
   return { el, fbUl, badge, reason };
-}
-
-function mkBtn(cls, label, onClick) {
-  const b = document.createElement('button');
-  if (cls) b.className = cls;
-  b.textContent = label;
-  b.addEventListener('click', onClick);
-  return b;
-}
-
-function appendFeedback(fbUl, f) {
-  const li = document.createElement('li');
-  li.innerHTML = `<strong>${fmtTime(f.created_at)}</strong> ${escapeHtml(f.text)}`;
-  fbUl.appendChild(li);
 }
 
 function renderPost(p, atTop) {
@@ -165,7 +228,7 @@ function applyStatus(u) {
   if (!card) return;
   card.el.className = 'card ' + u.status;
   card.badge.className = 'badge ' + u.status;
-  card.badge.textContent = statusLabel(u.status);
+  card.badge.textContent = u.status;
   if (u.status === 'declined' && u.decline_reason) {
     card.reason.textContent = 'Declined: ' + u.decline_reason;
     card.reason.hidden = false;
@@ -208,9 +271,11 @@ async function init() {
   try {
     const cfg = await (await fetch('/api/config')).json();
     tableCount = cfg.tableCount || 4;
+    pinRequired = !!cfg.pinRequired;
   } catch {
     /* defaults */
   }
+  updateLock();
   buildColumns();
   try {
     const d = await (await fetch('/api/posts?shift=current')).json();

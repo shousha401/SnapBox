@@ -74,22 +74,7 @@ body.tablet main {
 body.tablet.flash { animation: flash .6s ease; }
 @keyframes flash { 0%, 100% { background: var(--bg); } 30% { background: #fff3d6; } }
 
-.feedback { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; }
-.feedback h2 { margin: 0 0 8px; font-size: 15px; color: var(--muted); }
-.feedback ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-.feedback li {
-  background: #fff8ec; border: 1px solid #f0dcb4; border-left: 4px solid var(--warn);
-  padding: 10px 12px; border-radius: 8px; font-size: 15px;
-}
-.feedback .fb-time { color: var(--warn); font-weight: 700; margin-right: 6px; font-size: 13px; }
-.feedback .empty { color: var(--muted); font-size: 14px; }
-
 /* ---------------- Hub page ---------------- */
-.pinbox { display: flex; align-items: center; gap: 10px; }
-.pinbox input {
-  font: inherit; padding: 8px 10px; border: 1px solid var(--line);
-  border-radius: 10px; width: 130px; background: var(--surface);
-}
 body.hub main {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
   gap: 12px; padding: 14px; align-items: start;
@@ -153,8 +138,7 @@ body.landing main { max-width: 720px; margin: 0 auto; padding: 32px 16px; }
 .back { color: var(--muted); border: none; background: transparent; }
 
 /* ---------------- Tablet: banner + submissions ---------------- */
-.head-right { display: flex; align-items: center; gap: 12px; }
-.switch { text-decoration: none; font-size: 20px; color: var(--muted); padding: 4px 9px; border: 1px solid var(--line); border-radius: 8px; }
+.head-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
 .banner { padding: 12px 14px; border-radius: 10px; font-size: 16px; font-weight: 600; }
 .banner.ok { background: #d7f0eb; color: var(--accent-ink); }
 .banner.err { background: #fbe0e0; color: #8a1f1f; }
@@ -183,6 +167,33 @@ body.landing main { max-width: 720px; margin: 0 auto; padding: 32px 16px; }
   background: #d7f0eb; padding: 8px 12px; border-radius: 10px; white-space: nowrap;
 }
 .navlink:hover { background: #c3e8e1; }
+.navlink.ghost { background: var(--surface); border: 1px solid var(--line); color: var(--ink); }
+.navlink.ghost:hover { background: #eef0f2; }
+
+/* ---------------- PIN lock + modal ---------------- */
+.lock { font-weight: 700; font-size: 13px; padding: 8px 12px; border-radius: 10px; white-space: nowrap; }
+.lock.locked { background: #fdecc8; color: #8a5a00; border-color: #f0dcb4; }
+.lock.unlocked { background: #d7f0eb; color: var(--accent-ink); border-color: #bfe5dd; }
+
+.modal {
+  position: fixed; inset: 0; background: rgba(0, 0, 0, .5); z-index: 60;
+  display: flex; align-items: center; justify-content: center; padding: 20px;
+}
+.modal-card {
+  background: var(--surface); border-radius: var(--radius); padding: 22px;
+  width: 100%; max-width: 340px; box-shadow: var(--shadow);
+  display: flex; flex-direction: column; gap: 12px;
+}
+.modal-card h2 { margin: 0; font-size: 18px; }
+.modal-hint { margin: 0; font-size: 13px; color: var(--muted); }
+.modal-card input {
+  font: inherit; font-size: 22px; letter-spacing: .25em; text-align: center;
+  padding: 14px; border: 1px solid var(--line); border-radius: 10px;
+  background: var(--surface); color: var(--ink);
+}
+.pin-err { margin: 0; color: var(--danger); font-size: 14px; font-weight: 600; }
+.modal-actions { display: flex; gap: 8px; }
+.modal-actions button { flex: 1; padding: 13px; font-size: 15px; }
 body.history main { padding: 16px; max-width: 1400px; margin: 0 auto; }
 .controls { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; margin-bottom: 14px; }
 .controls label { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 7px; font-weight: 600; }
