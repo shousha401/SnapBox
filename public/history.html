@@ -12,6 +12,8 @@
     <div class="head-right">
       <a href="/hub" class="navlink ghost">← Back to hub</a>
       <a href="/" class="navlink ghost">🏠 Home</a>
+      <button id="lockBtn" class="lock locked">🔒 Locked</button>
+      <span id="hubStatus" class="status"></span>
     </div>
   </header>
 
@@ -21,12 +23,13 @@
       <label>Line
         <select id="line"><option value="">All lines</option></select>
       </label>
-      <label>Status
+      <label>Show
         <select id="status">
-          <option value="">All</option>
+          <option value="">All (not deleted)</option>
           <option value="pending">Pending</option>
           <option value="approved">Approved</option>
           <option value="declined">Declined</option>
+          <option value="deleted">🗑 Deleted</option>
         </select>
       </label>
     </div>
@@ -36,7 +39,7 @@
     <div class="summary" id="summary"></div>
 
     <div class="history-grid" id="grid"></div>
-    <div class="col-empty" id="empty" hidden>No photos on this day.</div>
+    <div class="col-empty" id="empty" hidden>No photos here.</div>
   </main>
 
   <div id="lightbox" class="lightbox" hidden>
@@ -45,6 +48,21 @@
     <button id="lightboxClose" aria-label="Close">✕</button>
   </div>
 
+  <div id="pinModal" class="modal" hidden>
+    <form class="modal-card" id="pinForm">
+      <h2>Supervisor PIN</h2>
+      <p class="modal-hint">Entered once — this device will remember it.</p>
+      <input id="pinInput" type="password" inputmode="numeric" enterkeyhint="go"
+             autocomplete="off" placeholder="••••" />
+      <p id="pinErr" class="pin-err" hidden>Wrong PIN — try again.</p>
+      <div class="modal-actions">
+        <button type="button" id="pinCancel">Cancel</button>
+        <button type="submit" class="send">Unlock</button>
+      </div>
+    </form>
+  </div>
+
+  <script src="/pin.js"></script>
   <script src="/history.js"></script>
 </body>
 </html>

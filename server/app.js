@@ -93,7 +93,7 @@ export function createApp(opts) {
         created_at: ts.toISOString(),
       });
       post.feedback = [];
-      sse.send('post:new', post, (m) => m.role === 'hub');
+      sse.send('post:new', post, toHubAndTable(tableNo));
       res.status(201).json(post);
     } catch (err) {
       res.status(500).json({ error: 'server_error', detail: String(err?.message || err) });
@@ -137,17 +137,29 @@ export function createApp(opts) {
     res.json(payload);
   });
 
-  // --- delete ---
+  // --- delete (soft: hidden from the live board, kept in the DB + on disk,
+  //     so managers can still find it — and restore it — from History) ---
   app.delete('/api/posts/:id', requirePin, (req, res) => {
     const id = Number(req.params.id);
     const post = db.getPost(id);
     if (!post) return res.status(404).json({ error: 'not_found' });
-    db.deletePost(id);
-    for (const p of [post.photo_path, post.thumb_path]) {
-      if (p) fs.rm(path.join(uploadsDir, path.basename(p)), { force: true }, () => {});
-    }
-    sse.send('post:deleted', { id }, (m) => m.role === 'hub');
-    res.json({ id, deleted: true });
+    const when = now().toISOString();
+    db.softDelete(id, when);
+    const payload = { id, table_no: post.table_no, deleted: true, deleted_at: when };
+    sse.send('post:deleted', payload, toHubAndTable(post.table_no));
+    res.json(payload);
+  });
+
+  // --- restore a deleted post ---
+  app.post('/api/posts/:id/restore', requirePin, (req, res) => {
+    const id = Number(req.params.id);
+    const post = db.getPost(id);
+    if (!post) return res.status(404).json({ error: 'not_found' });
+    db.restore(id);
+    const restored = db.getPost(id);
+    restored.feedback = db.listFeedbackForPost(id);
+    sse.send('post:new', restored, toHubAndTable(post.table_no));
+    res.json(restored);
   });
 
   // --- feedback (shows on the tablet + stays on the post) ---

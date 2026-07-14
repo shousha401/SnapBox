@@ -179,6 +179,48 @@ describe('open mode (no PIN configured)', () => {
   });
 });
 
+describe('delete is an archive, not an erase', () => {
+  it('hides the post from the board + tablet but keeps it (and its file) for history', async () => {
+    const { body } = await post(2);
+    const file = path.join(uploadsDir, path.basename(body.photo_path));
+
+    const del = await request(app).delete(`/api/posts/${body.id}`).set('x-snapbox-pin', PIN);
+    expect(del.status).toBe(200);
+
+    expect((await request(app).get('/api/posts')).body.posts).toHaveLength(0);
+    expect((await request(app).get('/api/table/2/posts')).body.posts).toHaveLength(0);
+
+    const hist = (await request(app).get('/api/history?date=2026-07-13')).body.posts;
+    expect(hist).toHaveLength(1);
+    expect(hist[0].id).toBe(body.id);
+    expect(hist[0].deleted_at).toBeTruthy();
+    expect(fs.existsSync(file)).toBe(true); // photo NOT erased from disk
+  });
+
+  it('restores a deleted post back onto the board', async () => {
+    const { body } = await post(2);
+    await request(app).delete(`/api/posts/${body.id}`).set('x-snapbox-pin', PIN);
+
+    const res = await request(app).post(`/api/posts/${body.id}/restore`).set('x-snapbox-pin', PIN);
+    expect(res.status).toBe(200);
+    expect(res.body.deleted_at).toBeNull();
+    expect((await request(app).get('/api/posts')).body.posts).toHaveLength(1);
+  });
+
+  it('requires the PIN to restore', async () => {
+    const { body } = await post();
+    await request(app).delete(`/api/posts/${body.id}`).set('x-snapbox-pin', PIN);
+    const res = await request(app).post(`/api/posts/${body.id}/restore`);
+    expect(res.status).toBe(401);
+  });
+
+  it('can still download a deleted photo', async () => {
+    const { body } = await post(1);
+    await request(app).delete(`/api/posts/${body.id}`).set('x-snapbox-pin', PIN);
+    expect((await request(app).get(`/api/posts/${body.id}/download`)).status).toBe(200);
+  });
+});
+
 describe('GET /api/posts/:id/download', () => {
   it('sends the photo as an attachment with a friendly filename', async () => {
     const { body } = await post(2);

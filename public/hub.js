@@ -1,73 +1,20 @@
 // Hub page: live board of posts grouped by line. Managers approve, decline
-// (reason required), send feedback, or delete. Live over SSE; PIN-gated.
+// (reason required), send feedback, or delete. Live over SSE.
 //
-// PIN UX: stored in localStorage so it's typed once per device. If you act while
-// locked (or the PIN is wrong), a keypad pops up and — once unlocked — the action
-// you were trying to do is retried automatically. No re-tapping.
+// Delete here is an ARCHIVE — the post leaves the board but stays in the DB and
+// can be found (and restored) on the History page. The supervisor-PIN gate lives
+// in pin.js, shared with History.
 const board = document.getElementById('board');
 const hubStatus = document.getElementById('hubStatus');
 const lightbox = document.getElementById('lightbox');
 const lightboxImg = document.getElementById('lightboxImg');
 const lightboxDl = document.getElementById('lightboxDl');
-const lockBtn = document.getElementById('lockBtn');
-const pinModal = document.getElementById('pinModal');
-const pinForm = document.getElementById('pinForm');
-const pinInput = document.getElementById('pinInput');
-const pinErr = document.getElementById('pinErr');
-const pinCancel = document.getElementById('pinCancel');
 
 let tableCount = 4;
-let pinRequired = false;
-let pendingAction = null; // what the manager was doing when we asked for the PIN
 const cards = new Map(); // post id -> { el, fbUl, badge, reason }
 
-// ---- PIN ----
-const getPin = () => localStorage.getItem('snapbox_pin') || '';
-function setPin(p) {
-  if (p) localStorage.setItem('snapbox_pin', p);
-  else localStorage.removeItem('snapbox_pin');
-  updateLock();
-}
-function updateLock() {
-  const unlocked = !!getPin();
-  lockBtn.className = 'lock ' + (unlocked ? 'unlocked' : 'locked');
-  lockBtn.textContent = unlocked ? '🔓 Unlocked' : '🔒 Locked';
-  lockBtn.hidden = !pinRequired;
-}
-function openPinModal(wrong) {
-  pinErr.hidden = !wrong;
-  pinInput.value = '';
-  pinModal.hidden = false;
-  setTimeout(() => pinInput.focus(), 50);
-}
-function closePinModal() {
-  pinModal.hidden = true;
-  pendingAction = null;
-}
+const action = (method, url, body) => window.SnapBoxPin.action(method, url, body);
 
-pinForm.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const p = pinInput.value.trim();
-  if (!p) return;
-  pinInput.blur(); // drop the on-screen keyboard before anything else happens
-  setPin(p);
-  pinModal.hidden = true;
-  const retry = pendingAction;
-  pendingAction = null;
-  if (retry) await retry(); // finish what they were doing
-});
-pinCancel.addEventListener('click', closePinModal);
-pinModal.addEventListener('click', (e) => { if (e.target === pinModal) closePinModal(); });
-
-lockBtn.addEventListener('click', () => {
-  if (getPin()) {
-    if (confirm('Lock SnapBox — forget the PIN on this device?')) setPin('');
-  } else {
-    openPinModal(false);
-  }
-});
-
-// ---- helpers ----
 function setHubStatus(text, kind = '') {
   hubStatus.textContent = text;
   hubStatus.className = 'status' + (kind ? ' ' + kind : '');
@@ -81,38 +28,6 @@ function escapeHtml(s) {
 function fmtTime(iso) {
   const d = new Date(iso);
   return isNaN(d) ? '' : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-}
-
-// Never throws — on a missing/bad PIN it asks, then retries itself.
-async function action(method, url, body) {
-  if (pinRequired && !getPin()) {
-    pendingAction = () => action(method, url, body);
-    openPinModal(false);
-    return;
-  }
-  const headers = {};
-  const p = getPin();
-  if (p) headers['x-snapbox-pin'] = p;
-  if (body) headers['Content-Type'] = 'application/json';
-
-  let r;
-  try {
-    r = await fetch(url, { method, headers, body: body ? JSON.stringify(body) : undefined });
-  } catch {
-    setHubStatus('Network error', 'err');
-    return;
-  }
-  if (r.status === 401) {
-    setPin(''); // stored PIN is wrong — forget it and ask again
-    pendingAction = () => action(method, url, body);
-    openPinModal(true);
-    return;
-  }
-  if (!r.ok) {
-    setHubStatus('Action failed', 'err');
-    return;
-  }
-  return r.json();
 }
 
 // ---- board ----
@@ -205,7 +120,9 @@ function buildCard(p) {
       if (text && text.trim()) action('POST', `/api/posts/${p.id}/feedback`, { text: text.trim() });
     }),
     mkBtn('danger', '🗑', () => {
-      if (confirm('Delete this post?')) action('DELETE', `/api/posts/${p.id}`);
+      if (confirm('Remove this post from the board?\n\nIt is kept in History and can be restored.')) {
+        action('DELETE', `/api/posts/${p.id}`);
+      }
     })
   );
 
@@ -238,20 +155,20 @@ function applyStatus(u) {
   }
 }
 
+function removeCard(id) {
+  const card = cards.get(id);
+  if (!card) return;
+  const colBody = card.el.parentElement;
+  card.el.remove();
+  cards.delete(id);
+  if (colBody) toggleEmpty(colBody);
+}
+
 function connect() {
   const es = new EventSource('/api/stream?role=hub');
   es.addEventListener('post:new', (e) => renderPost(JSON.parse(e.data), true));
   es.addEventListener('post:update', (e) => applyStatus(JSON.parse(e.data)));
-  es.addEventListener('post:deleted', (e) => {
-    const { id } = JSON.parse(e.data);
-    const card = cards.get(id);
-    if (card) {
-      const colBody = card.el.parentElement;
-      card.el.remove();
-      cards.delete(id);
-      if (colBody) toggleEmpty(colBody);
-    }
-  });
+  es.addEventListener('post:deleted', (e) => removeCard(JSON.parse(e.data).id));
   es.addEventListener('feedback:new', (e) => {
     const f = JSON.parse(e.data);
     const card = cards.get(f.post_id);
@@ -270,6 +187,7 @@ document.getElementById('lightboxClose').addEventListener('click', () => (lightb
 lightbox.addEventListener('click', (e) => { if (e.target === lightbox) lightbox.hidden = true; });
 
 async function init() {
+  let pinRequired = false;
   try {
     const cfg = await (await fetch('/api/config')).json();
     tableCount = cfg.tableCount || 4;
@@ -277,7 +195,8 @@ async function init() {
   } catch {
     /* defaults */
   }
-  updateLock();
+  window.SnapBoxPin.init({ required: pinRequired, onStatus: setHubStatus });
+
   buildColumns();
   try {
     const d = await (await fetch('/api/posts?shift=current')).json();

@@ -236,6 +236,15 @@ body.history main { padding: 16px; max-width: 1400px; margin: 0 auto; }
   gap: 12px; align-items: start;
 }
 
+/* ---------------- Archived (soft-deleted) posts ---------------- */
+.card.archived { opacity: .72; background: #f7f7f8; }
+.card.archived .thumb { filter: grayscale(.5); }
+.archived-note {
+  font-size: 12px; font-weight: 700; color: var(--muted);
+  background: #eef0f2; border-radius: 6px; padding: 5px 8px;
+}
+.pill.archived { background: #eef0f2; color: var(--muted); }
+
 /* ---------------- Decline states ---------------- */
 .badge.declined { background: #fbe0e0; color: #8a1f1f; }
 .card.declined { border-color: #f0c9c9; }

@@ -234,9 +234,24 @@ async function loadSubs() {
   }
 }
 
+function removeSub(id) {
+  const it = items.get(id);
+  if (!it) return;
+  it.el.remove();
+  items.delete(id);
+  if (!subs.querySelector('.sub')) {
+    const li = document.createElement('li');
+    li.className = 'empty';
+    li.textContent = 'Nothing sent yet.';
+    subs.appendChild(li);
+  }
+}
+
 function connectStream() {
   if (!tableNo) return;
   const es = new EventSource(`/api/stream?role=table&n=${tableNo}`);
+  es.addEventListener('post:new', (e) => renderSub(JSON.parse(e.data), true));
+  es.addEventListener('post:deleted', (e) => removeSub(JSON.parse(e.data).id));
   es.addEventListener('post:update', (e) => {
     const u = JSON.parse(e.data);
     applyStatus(u);

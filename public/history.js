@@ -1,5 +1,6 @@
-// History page (managers): browse past photos by date, filter by line + status.
-// Read-only — the live board at /hub is where you act on things.
+// History page (managers): browse past photos by date, filter by line + status,
+// download, delete (archive) and restore. Deleted photos are never erased — pick
+// "🗑 Deleted" in the Show dropdown to find them again.
 const dateInput = document.getElementById('date');
 const lineSel = document.getElementById('line');
 const statusSel = document.getElementById('status');
@@ -7,12 +8,20 @@ const days = document.getElementById('days');
 const summary = document.getElementById('summary');
 const grid = document.getElementById('grid');
 const empty = document.getElementById('empty');
+const statusEl = document.getElementById('hubStatus');
 const lightbox = document.getElementById('lightbox');
 const lightboxImg = document.getElementById('lightboxImg');
 const lightboxDl = document.getElementById('lightboxDl');
 
-let posts = []; // everything loaded for the selected date
+let posts = []; // everything for the selected date, deleted ones included
 
+const action = (method, url, body) => window.SnapBoxPin.action(method, url, body);
+
+function setStatus(text, kind = '') {
+  statusEl.textContent = text;
+  statusEl.className = 'status' + (kind ? ' ' + kind : '');
+  if (text) setTimeout(() => { if (statusEl.textContent === text) statusEl.textContent = ''; }, 3500);
+}
 function pad(n) { return String(n).padStart(2, '0'); }
 function todayStr() {
   const d = new Date();
@@ -43,9 +52,10 @@ async function loadDays() {
       const b = document.createElement('button');
       b.className = 'day-chip';
       b.dataset.date = row.date;
+      const extra = row.deleted ? ` · ${row.deleted} deleted` : '';
       b.innerHTML =
         `<span class="day-date">${prettyDate(row.date)}</span>` +
-        `<span class="day-count">${row.total} photo${row.total === 1 ? '' : 's'}</span>`;
+        `<span class="day-count">${row.total} photo${row.total === 1 ? '' : 's'}${extra}</span>`;
       b.addEventListener('click', () => {
         dateInput.value = row.date;
         load();
@@ -65,8 +75,10 @@ function markActiveDay() {
 
 // ---- cards ----
 function buildCard(p) {
+  const archived = !!p.deleted_at;
+
   const el = document.createElement('article');
-  el.className = 'card ' + p.status;
+  el.className = 'card ' + p.status + (archived ? ' archived' : '');
 
   const img = document.createElement('img');
   img.className = 'thumb';
@@ -96,6 +108,13 @@ function buildCard(p) {
 
   body.append(meta, note);
 
+  if (archived) {
+    const arch = document.createElement('div');
+    arch.className = 'archived-note';
+    arch.textContent = `🗑 Deleted ${fmtTime(p.deleted_at)}`;
+    body.appendChild(arch);
+  }
+
   if (p.status === 'declined' && p.decline_reason) {
     const reason = document.createElement('div');
     reason.className = 'reason';
@@ -116,11 +135,37 @@ function buildCard(p) {
 
   const row = document.createElement('div');
   row.className = 'row';
+
   const dl = document.createElement('a');
   dl.className = 'dl-btn';
   dl.href = `/api/posts/${p.id}/download`;
   dl.textContent = '⬇ Download';
   row.appendChild(dl);
+
+  const btn = document.createElement('button');
+  if (archived) {
+    btn.className = 'approve';
+    btn.textContent = '♻ Restore';
+    btn.addEventListener('click', async () => {
+      const ok = await action('POST', `/api/posts/${p.id}/restore`);
+      if (ok) {
+        setStatus('Restored ✓', 'ok');
+        await refresh();
+      }
+    });
+  } else {
+    btn.className = 'danger';
+    btn.textContent = '🗑 Delete';
+    btn.addEventListener('click', async () => {
+      if (!confirm('Delete this photo?\n\nIt is kept here — pick "🗑 Deleted" in Show to find it again.')) return;
+      const ok = await action('DELETE', `/api/posts/${p.id}`);
+      if (ok) {
+        setStatus('Deleted — still in history', 'ok');
+        await refresh();
+      }
+    });
+  }
+  row.appendChild(btn);
   body.appendChild(row);
 
   el.append(img, body);
@@ -131,21 +176,29 @@ function buildCard(p) {
 function render() {
   const line = lineSel.value;
   const status = statusSel.value;
-  const shown = posts.filter(
-    (p) => (!line || String(p.table_no) === line) && (!status || p.status === status)
-  );
+
+  const shown = posts.filter((p) => {
+    if (line && String(p.table_no) !== line) return false;
+    if (status === 'deleted') return !!p.deleted_at;
+    if (p.deleted_at) return false; // deleted are hidden unless asked for
+    return !status || p.status === status;
+  });
 
   grid.innerHTML = '';
   shown.forEach((p) => grid.appendChild(buildCard(p)));
   empty.hidden = shown.length > 0;
 
-  const count = (s) => posts.filter((p) => p.status === s).length;
+  const live = posts.filter((p) => !p.deleted_at);
+  const count = (s) => live.filter((p) => p.status === s).length;
+  const deleted = posts.length - live.length;
+
   summary.innerHTML = posts.length
-    ? `<strong>${posts.length}</strong> photo${posts.length === 1 ? '' : 's'} on ${prettyDate(dateInput.value)}` +
+    ? `<strong>${live.length}</strong> photo${live.length === 1 ? '' : 's'} on ${prettyDate(dateInput.value)}` +
       ` · <span class="pill approved">${count('approved')} approved</span>` +
       ` <span class="pill declined">${count('declined')} declined</span>` +
       ` <span class="pill pending">${count('pending')} pending</span>` +
-      (shown.length !== posts.length ? ` · showing ${shown.length}` : '')
+      (deleted ? ` <span class="pill archived">${deleted} deleted</span>` : '') +
+      (shown.length !== live.length ? ` · showing ${shown.length}` : '')
     : '';
 }
 
@@ -160,6 +213,12 @@ async function load() {
   render();
 }
 
+// after a delete/restore, the day counts change too
+async function refresh() {
+  await load();
+  await loadDays();
+}
+
 // ---- boot ----
 document.getElementById('lightboxClose').addEventListener('click', () => (lightbox.hidden = true));
 lightbox.addEventListener('click', (e) => { if (e.target === lightbox) lightbox.hidden = true; });
@@ -169,12 +228,16 @@ statusSel.addEventListener('change', render);
 
 async function init() {
   let tableCount = 4;
+  let pinRequired = false;
   try {
     const cfg = await (await fetch('/api/config')).json();
     tableCount = cfg.tableCount || 4;
+    pinRequired = !!cfg.pinRequired;
   } catch {
-    /* default */
+    /* defaults */
   }
+  window.SnapBoxPin.init({ required: pinRequired, onStatus: setStatus });
+
   for (let i = 1; i <= tableCount; i++) {
     const o = document.createElement('option');
     o.value = String(i);

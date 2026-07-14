@@ -20,8 +20,12 @@ network can see.
   shift boundary; everything stays in the database (`shift_id` is just a view
   filter).
 - **History** — `/history` on manager PCs. Browse any past day, filter by line and
-  by status, click a photo to enlarge, and **download** any photo. Read-only; the
-  live board at `/hub` is where you act on things.
+  by status, click a photo to enlarge, **download** it, **delete** it, or
+  **restore** a deleted one.
+- **Nothing is ever erased** — "Delete" is an *archive*: it sets `deleted_at`, so
+  the post leaves the live board and the tablets but keeps its row **and its photo
+  file**. Pick **🗑 Deleted** in History's *Show* dropdown to find deleted photos
+  and restore them.
 
 ## Run it
 
@@ -63,7 +67,8 @@ pm2 save
 | `POST`   | `/api/posts`                   | multipart: `photo`, `table_no`, `note` |
 | `GET`    | `/api/posts?shift=current`     | feed for a shift                 |
 | `POST`   | `/api/posts/:id/approve`       | 🔒 PIN                            |
-| `DELETE` | `/api/posts/:id`               | 🔒 PIN                            |
+| `DELETE` | `/api/posts/:id`               | 🔒 PIN — archives it (never erases) |
+| `POST`   | `/api/posts/:id/restore`       | 🔒 PIN — un-deletes it           |
 | `POST`   | `/api/posts/:id/feedback`      | 🔒 PIN — `{ text }`              |
 | `GET`    | `/api/table/:n/feedback`       | this table's feedback, this shift |
 | `GET`    | `/api/posts/:id/download`      | photo as an attachment, named `SnapBox_Line2_2026-07-13_1604.jpg` |

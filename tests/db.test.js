@@ -60,17 +60,39 @@ describe('posts', () => {
     expect(row.decline_reason).toBeNull();
   });
 
-  it('deletes a post and cascades its feedback', () => {
-    const p = db.createPost(makePost());
+  it('soft-deletes: the row and its feedback survive, but it leaves the live views', () => {
+    const p = db.createPost(makePost({ table_no: 1 }));
     db.addFeedback(p.id, 'note', '2026-07-13T10:05:00.000Z');
-    const removed = db.deletePost(p.id);
-    expect(removed.id).toBe(p.id);
-    expect(db.getPost(p.id)).toBeUndefined();
-    expect(db.raw.prepare('SELECT COUNT(*) c FROM feedback').get().c).toBe(0);
+
+    expect(db.softDelete(p.id, '2026-07-13T12:00:00.000Z')).toBe(true);
+
+    const row = db.getPost(p.id);
+    expect(row).toBeDefined(); // NOT erased
+    expect(row.deleted_at).toBe('2026-07-13T12:00:00.000Z');
+    expect(db.raw.prepare('SELECT COUNT(*) c FROM feedback').get().c).toBe(1);
+
+    // hidden from the hub board and the tablet
+    expect(db.listPostsByShift('2026-07-13')).toHaveLength(0);
+    expect(db.listPostsByTableShift(1, '2026-07-13')).toHaveLength(0);
+    expect(db.listFeedbackForTableShift(1, '2026-07-13')).toHaveLength(0);
+
+    // still visible in history
+    expect(db.listPostsByDate('2026-07-13')).toHaveLength(1);
   });
 
-  it('deletePost returns null for a missing id', () => {
-    expect(db.deletePost(999)).toBeNull();
+  it('restores a deleted post back onto the live views', () => {
+    const p = db.createPost(makePost({ table_no: 1 }));
+    db.softDelete(p.id, '2026-07-13T12:00:00.000Z');
+    expect(db.restore(p.id)).toBe(true);
+    expect(db.getPost(p.id).deleted_at).toBeNull();
+    expect(db.listPostsByShift('2026-07-13')).toHaveLength(1);
+  });
+
+  it('softDelete is a no-op on an already-deleted post', () => {
+    const p = db.createPost(makePost());
+    db.softDelete(p.id, '2026-07-13T12:00:00.000Z');
+    expect(db.softDelete(p.id, '2026-07-13T13:00:00.000Z')).toBe(false);
+    expect(db.getPost(p.id).deleted_at).toBe('2026-07-13T12:00:00.000Z'); // keeps the first time
   });
 });
 
@@ -104,6 +126,15 @@ describe('history', () => {
     db.createPost(makePost({ shift_id: '2026-07-13#0' }));
     db.createPost(makePost({ shift_id: '2026-07-13#1' }));
     expect(db.listPostsByDate('2026-07-13')).toHaveLength(2);
+  });
+
+  it('counts deleted separately and leaves them out of the day total', () => {
+    const a = db.createPost(makePost({ shift_id: '2026-07-13' }));
+    db.createPost(makePost({ shift_id: '2026-07-13' }));
+    db.softDelete(a.id, '2026-07-13T12:00:00.000Z');
+
+    const [day] = db.listHistoryDates();
+    expect(day).toMatchObject({ date: '2026-07-13', total: 1, deleted: 1 });
   });
 
   it('summarises each day with per-status counts, newest day first', () => {
