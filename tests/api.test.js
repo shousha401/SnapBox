@@ -179,6 +179,22 @@ describe('open mode (no PIN configured)', () => {
   });
 });
 
+describe('GET /api/posts/:id/download', () => {
+  it('sends the photo as an attachment with a friendly filename', async () => {
+    const { body } = await post(2);
+    const res = await request(app).get(`/api/posts/${body.id}/download`);
+    expect(res.status).toBe(200);
+    const cd = res.headers['content-disposition'];
+    expect(cd).toMatch(/attachment/);
+    expect(cd).toMatch(/SnapBox_Line2_2026-07-13_1000\.jpg/);
+  });
+
+  it('404s for a post that does not exist', async () => {
+    const res = await request(app).get('/api/posts/999/download');
+    expect(res.status).toBe(404);
+  });
+});
+
 describe('history endpoints', () => {
   it('returns every post on a date, across lines', async () => {
     const a = await post(1, 'line one');

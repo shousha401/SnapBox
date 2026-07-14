@@ -8,6 +8,7 @@ const board = document.getElementById('board');
 const hubStatus = document.getElementById('hubStatus');
 const lightbox = document.getElementById('lightbox');
 const lightboxImg = document.getElementById('lightboxImg');
+const lightboxDl = document.getElementById('lightboxDl');
 const lockBtn = document.getElementById('lockBtn');
 const pinModal = document.getElementById('pinModal');
 const pinForm = document.getElementById('pinForm');
@@ -160,7 +161,7 @@ function buildCard(p) {
   img.loading = 'lazy';
   img.src = p.thumb_path;
   img.alt = `Line ${p.table_no} photo`;
-  img.addEventListener('click', () => openLightbox(p.photo_path));
+  img.addEventListener('click', () => openLightbox(p));
 
   const body = document.createElement('div');
   body.className = 'body';
@@ -260,8 +261,9 @@ function connect() {
   es.onopen = () => setHubStatus('');
 }
 
-function openLightbox(src) {
-  lightboxImg.src = src;
+function openLightbox(p) {
+  lightboxImg.src = p.photo_path;
+  lightboxDl.href = `/api/posts/${p.id}/download`;
   lightbox.hidden = false;
 }
 document.getElementById('lightboxClose').addEventListener('click', () => (lightbox.hidden = true));

@@ -167,6 +167,22 @@ export function createApp(opts) {
     res.status(201).json(payload);
   });
 
+  // --- download a photo with a human-friendly filename ---
+  app.get('/api/posts/:id/download', (req, res) => {
+    const id = Number(req.params.id);
+    const post = db.getPost(id);
+    if (!post) return res.status(404).json({ error: 'not_found' });
+
+    const file = path.join(uploadsDir, path.basename(post.photo_path));
+    if (!fs.existsSync(file)) return res.status(404).json({ error: 'file_missing' });
+
+    const d = new Date(post.created_at);
+    const p2 = (n) => String(n).padStart(2, '0');
+    const stamp = `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}_${p2(d.getHours())}${p2(d.getMinutes())}`;
+    const ext = path.extname(post.photo_path) || '.jpg';
+    res.download(file, `SnapBox_Line${post.table_no}_${stamp}${ext}`);
+  });
+
   // --- history: which days have posts, with per-day counts ---
   app.get('/api/history/dates', (_req, res) => {
     res.json({ dates: db.listHistoryDates() });

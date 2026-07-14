@@ -9,6 +9,7 @@ const grid = document.getElementById('grid');
 const empty = document.getElementById('empty');
 const lightbox = document.getElementById('lightbox');
 const lightboxImg = document.getElementById('lightboxImg');
+const lightboxDl = document.getElementById('lightboxDl');
 
 let posts = []; // everything loaded for the selected date
 
@@ -74,6 +75,7 @@ function buildCard(p) {
   img.alt = `Line ${p.table_no} photo`;
   img.addEventListener('click', () => {
     lightboxImg.src = p.photo_path;
+    lightboxDl.href = `/api/posts/${p.id}/download`;
     lightbox.hidden = false;
   });
 
@@ -111,6 +113,15 @@ function buildCard(p) {
     });
     body.appendChild(ul);
   }
+
+  const row = document.createElement('div');
+  row.className = 'row';
+  const dl = document.createElement('a');
+  dl.className = 'dl-btn';
+  dl.href = `/api/posts/${p.id}/download`;
+  dl.textContent = '⬇ Download';
+  row.appendChild(dl);
+  body.appendChild(row);
 
   el.append(img, body);
   return el;
