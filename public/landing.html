@@ -10,20 +10,25 @@
   <header><h1>SnapBox <span class="tag">📦</span></h1></header>
   <main>
     <div class="choice-grid" id="choiceGrid">
-      <button class="choice-card" id="chooseTablet">
+      <button class="choice-card" data-area="cmp">
         <span class="ic">📦</span>
-        <span class="t">Warehouse Tablet</span>
-        <span class="d">Snap a photo on a line</span>
+        <span class="t">CMP Lines</span>
+        <span class="d">Snap a photo on a CMP line</span>
+      </button>
+      <button class="choice-card" data-area="gff">
+        <span class="ic">🥖</span>
+        <span class="t">GFF Lines</span>
+        <span class="d">Snap a photo on a GFF line</span>
       </button>
       <button class="choice-card" id="chooseManager">
         <span class="ic">🖥️</span>
         <span class="t">Manager Hub</span>
-        <span class="d">Review, approve &amp; decline</span>
+        <span class="d">Review both areas — approve &amp; decline</span>
       </button>
     </div>
 
     <div class="line-pick" id="linePick" hidden>
-      <h2>Which line are you on?</h2>
+      <h2 id="linePickTitle">Which line are you on?</h2>
       <div class="line-grid" id="lineGrid"></div>
       <button class="back" id="backBtn">← Back</button>
     </div>

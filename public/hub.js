@@ -1,19 +1,33 @@
-// Hub page: live board of posts grouped by line. Managers approve, decline
-// (reason required), send feedback, or delete. Live over SSE.
+// Hub page: live board of posts grouped by line, across both production areas.
+// Managers approve, decline (reason required), send feedback, or delete.
+// Live over SSE.
+//
+// The CMP / GFF / All tabs only show and hide columns — every column is built
+// once and every post is kept in the DOM, so switching tabs is instant and a
+// post that lands on a hidden area still counts up on that area's tab.
 //
 // Delete here is an ARCHIVE — the post leaves the board but stays in the DB and
 // can be found (and restored) on the History page. The supervisor-PIN gate lives
 // in pin.js, shared with History.
 const board = document.getElementById('board');
+const tabsNav = document.getElementById('tabs');
 const hubStatus = document.getElementById('hubStatus');
 const lightbox = document.getElementById('lightbox');
 const lightboxImg = document.getElementById('lightboxImg');
 const lightboxDl = document.getElementById('lightboxDl');
 
-let tableCount = 4;
+const TAB_KEY = 'snapbox_hub_tab';
+let areas = [
+  { key: 'cmp', label: 'CMP', lines: 4 },
+  { key: 'gff', label: 'GFF', lines: 2 },
+];
+let tab = localStorage.getItem(TAB_KEY) || 'all';
 const cards = new Map(); // post id -> { el, fbUl, badge, reason }
+const unseen = new Map(); // area key -> posts that arrived while it was hidden
+const tabEls = new Map(); // tab value -> { btn, count }
 
 const action = (method, url, body) => window.SnapBoxPin.action(method, url, body);
+const areaLabel = (key) => (areas.find((a) => a.key === key) || {}).label || String(key).toUpperCase();
 
 function setHubStatus(text, kind = '') {
   hubStatus.textContent = text;
@@ -30,14 +44,65 @@ function fmtTime(iso) {
   return isNaN(d) ? '' : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
+// ---- area tabs ----
+const isVisible = (areaKey) => tab === 'all' || tab === areaKey;
+
+function buildTabs() {
+  tabsNav.innerHTML = '';
+  tabEls.clear();
+  const defs = [{ value: 'all', label: 'All lines' }].concat(
+    areas.map((a) => ({ value: a.key, label: `${a.label} Lines` }))
+  );
+  for (const d of defs) {
+    const btn = document.createElement('button');
+    btn.className = 'tab';
+    btn.dataset.tab = d.value;
+    const name = document.createElement('span');
+    name.textContent = d.label;
+    const count = document.createElement('span');
+    count.className = 'tab-count';
+    count.hidden = true;
+    btn.append(name, count);
+    btn.addEventListener('click', () => selectTab(d.value));
+    tabsNav.appendChild(btn);
+    tabEls.set(d.value, { btn, count });
+  }
+}
+
+function selectTab(value) {
+  tab = value;
+  localStorage.setItem(TAB_KEY, value);
+  for (const a of areas) if (isVisible(a.key)) unseen.set(a.key, 0);
+  applyTab();
+}
+
+function applyTab() {
+  for (const [value, t] of tabEls) t.btn.classList.toggle('active', value === tab);
+  for (const col of board.querySelectorAll('.col')) {
+    col.hidden = !isVisible(col.dataset.area);
+  }
+  for (const a of areas) {
+    const t = tabEls.get(a.key);
+    if (!t) continue;
+    const n = unseen.get(a.key) || 0;
+    t.count.textContent = n > 99 ? '99+' : String(n);
+    t.count.hidden = n === 0;
+  }
+}
+
 // ---- board ----
 function buildColumns() {
   board.innerHTML = '';
-  for (let i = 1; i <= tableCount; i++) {
-    const col = document.createElement('section');
-    col.className = 'col';
-    col.innerHTML = `<h2>Line ${i}</h2><div class="col-body" id="col-${i}"><div class="col-empty">No posts yet.</div></div>`;
-    board.appendChild(col);
+  for (const a of areas) {
+    for (let i = 1; i <= a.lines; i++) {
+      const col = document.createElement('section');
+      col.className = 'col';
+      col.dataset.area = a.key;
+      col.innerHTML =
+        `<h2><span class="area-pill ${a.key}">${escapeHtml(a.label)}</span> Line ${i}</h2>` +
+        `<div class="col-body" id="col-${a.key}-${i}"><div class="col-empty">No posts yet.</div></div>`;
+      board.appendChild(col);
+    }
   }
 }
 function toggleEmpty(colBody) {
@@ -67,6 +132,8 @@ function appendFeedback(fbUl, f) {
 }
 
 function buildCard(p) {
+  const line = `${areaLabel(p.area)} Line ${p.table_no}`;
+
   const el = document.createElement('article');
   el.className = 'card ' + p.status;
   el.dataset.id = p.id;
@@ -75,7 +142,7 @@ function buildCard(p) {
   img.className = 'thumb';
   img.loading = 'lazy';
   img.src = p.thumb_path;
-  img.alt = `Line ${p.table_no} photo`;
+  img.alt = `${line} photo`;
   img.addEventListener('click', () => openLightbox(p));
 
   const body = document.createElement('div');
@@ -107,7 +174,7 @@ function buildCard(p) {
   row1.append(
     mkBtn('approve', '✓ Approve', () => action('POST', `/api/posts/${p.id}/approve`)),
     mkBtn('decline', '✗ Decline', () => {
-      const why = prompt(`Reason for declining (Line ${p.table_no}):`);
+      const why = prompt(`Reason for declining (${line}):`);
       if (why && why.trim()) action('POST', `/api/posts/${p.id}/decline`, { reason: why.trim() });
     })
   );
@@ -116,7 +183,7 @@ function buildCard(p) {
   row2.className = 'row';
   row2.append(
     mkBtn('', '✎ Feedback', () => {
-      const text = prompt(`Feedback to Line ${p.table_no}:`);
+      const text = prompt(`Feedback to ${line}:`);
       if (text && text.trim()) action('POST', `/api/posts/${p.id}/feedback`, { text: text.trim() });
     }),
     mkBtn('danger', '🗑', () => {
@@ -132,13 +199,22 @@ function buildCard(p) {
 }
 
 function renderPost(p, atTop) {
-  const colBody = document.getElementById('col-' + p.table_no);
+  const colBody = document.getElementById(`col-${p.area}-${p.table_no}`);
   if (!colBody || cards.has(p.id)) return;
   const card = buildCard(p);
   cards.set(p.id, card);
   if (atTop) colBody.insertBefore(card.el, colBody.firstChild);
   else colBody.appendChild(card.el);
   toggleEmpty(colBody);
+}
+
+// A post arriving live on an area you are not looking at counts up on its tab.
+function onLivePost(p) {
+  renderPost(p, true);
+  if (!isVisible(p.area)) {
+    unseen.set(p.area, (unseen.get(p.area) || 0) + 1);
+    applyTab();
+  }
 }
 
 function applyStatus(u) {
@@ -166,7 +242,7 @@ function removeCard(id) {
 
 function connect() {
   const es = new EventSource('/api/stream?role=hub');
-  es.addEventListener('post:new', (e) => renderPost(JSON.parse(e.data), true));
+  es.addEventListener('post:new', (e) => onLivePost(JSON.parse(e.data)));
   es.addEventListener('post:update', (e) => applyStatus(JSON.parse(e.data)));
   es.addEventListener('post:deleted', (e) => removeCard(JSON.parse(e.data).id));
   es.addEventListener('feedback:new', (e) => {
@@ -190,14 +266,20 @@ async function init() {
   let pinRequired = false;
   try {
     const cfg = await (await fetch('/api/config')).json();
-    tableCount = cfg.tableCount || 4;
+    if (cfg.areas && cfg.areas.length) areas = cfg.areas;
     pinRequired = !!cfg.pinRequired;
   } catch {
     /* defaults */
   }
   window.SnapBoxPin.init({ required: pinRequired, onStatus: setHubStatus });
 
+  // A tab remembered from before an area was renamed or removed.
+  if (tab !== 'all' && !areas.some((a) => a.key === tab)) tab = 'all';
+
+  buildTabs();
   buildColumns();
+  applyTab();
+
   try {
     const d = await (await fetch('/api/posts?shift=current')).json();
     (d.posts || []).forEach((p) => renderPost(p, false));

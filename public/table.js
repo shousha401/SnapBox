@@ -1,6 +1,17 @@
 // Tablet page: capture a photo, send it to the hub, and watch each submission's
 // status (Pending -> Approved / Declined-with-reason) plus any manager feedback.
-const tableNo = Number(location.pathname.split('/')[2] || 0);
+//
+// A tablet is pinned to one line of one area — /line/cmp/2 is a different line
+// from /line/gff/2, and each only ever sees its own posts and feedback.
+
+// /line/gff/1 -> gff line 1 · /table/2 -> cmp line 2 (pre-areas bookmarks)
+function readRoute() {
+  const parts = location.pathname.split('/').filter(Boolean);
+  return parts[0] === 'line'
+    ? { area: (parts[1] || '').toLowerCase(), lineNo: Number(parts[2] || 0) }
+    : { area: 'cmp', lineNo: Number(parts[1] || 0) };
+}
+const { area, lineNo: tableNo } = readRoute();
 
 const el = (id) => document.getElementById(id);
 const video = el('video');
@@ -16,8 +27,26 @@ const statusEl = el('status');
 const banner = el('banner');
 const subs = el('subs');
 
-el('title').textContent = tableNo ? `Line ${tableNo}` : 'Line —';
-document.title = `SnapBox — Line ${tableNo || '—'}`;
+// Show the area straight away from the URL, then swap in its proper label once
+// /api/config answers ("gff" -> "GFF" today, but the label is the server's).
+function setLineName(label) {
+  const pill = el('areaPill');
+  pill.textContent = label;
+  pill.hidden = !label;
+  el('lineName').textContent = tableNo ? `Line ${tableNo}` : 'Line —';
+  document.title = `SnapBox — ${label} Line ${tableNo || '—'}`;
+}
+setLineName(area.toUpperCase());
+
+fetch('/api/config')
+  .then((r) => r.json())
+  .then((cfg) => {
+    const a = (cfg.areas || []).find((x) => x.key === area);
+    if (a) setLineName(a.label);
+  })
+  .catch(() => {
+    /* the URL-derived label is good enough */
+  });
 
 let blob = null;
 let stream = null;
@@ -139,6 +168,7 @@ send.addEventListener('click', async () => {
   send.disabled = true;
   setStatus('Sending…');
   const fd = new FormData();
+  fd.append('area', area);
   fd.append('table_no', String(tableNo));
   fd.append('note', note.value);
   fd.append('photo', blob, 'snap.jpg');
@@ -227,7 +257,7 @@ function applyStatus(update) {
 // ---- initial load + live updates ----
 async function loadSubs() {
   try {
-    const d = await (await fetch(`/api/table/${tableNo}/posts`)).json();
+    const d = await (await fetch(`/api/lines/${area}/${tableNo}/posts`)).json();
     (d.posts || []).forEach((p) => renderSub(p, false)); // newest-first
   } catch {
     /* ignore */
@@ -249,7 +279,7 @@ function removeSub(id) {
 
 function connectStream() {
   if (!tableNo) return;
-  const es = new EventSource(`/api/stream?role=table&n=${tableNo}`);
+  const es = new EventSource(`/api/stream?role=table&area=${area}&n=${tableNo}`);
   es.addEventListener('post:new', (e) => renderSub(JSON.parse(e.data), true));
   es.addEventListener('post:deleted', (e) => removeSub(JSON.parse(e.data).id));
   es.addEventListener('post:update', (e) => {

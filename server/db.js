@@ -1,11 +1,16 @@
 import Database from 'better-sqlite3';
+import { DEFAULT_AREA } from './areas.js';
 
+// Every post belongs to an (area, line) pair — 'cmp' Line 2 and 'gff' Line 2 are
+// different lines, so anything scoped to one line matches on both columns.
+//
 // Posts are NEVER hard-deleted. "Delete" sets deleted_at, which hides the post
 // from the live board and the tablets but keeps the row (and the photo file) so
 // managers can find it again in History.
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS posts (
   id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  area           TEXT    NOT NULL DEFAULT '${DEFAULT_AREA}',
   table_no       INTEGER NOT NULL,
   note           TEXT    NOT NULL DEFAULT '',
   photo_path     TEXT    NOT NULL,
@@ -23,7 +28,6 @@ CREATE TABLE IF NOT EXISTS feedback (
   created_at  TEXT    NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_posts_shift ON posts(shift_id);
-CREATE INDEX IF NOT EXISTS idx_posts_table_shift ON posts(table_no, shift_id);
 CREATE INDEX IF NOT EXISTS idx_feedback_post ON feedback(post_id);
 `;
 
@@ -33,25 +37,38 @@ export function createDb(location = ':memory:') {
   db.pragma('foreign_keys = ON');
   db.exec(SCHEMA);
 
-  // Migrations for databases created by earlier versions.
+  // Migrations for databases created by earlier versions. CREATE TABLE IF NOT
+  // EXISTS leaves an existing posts table alone, so every column added since has
+  // to be ALTERed in here — and anything that depends on those columns (the
+  // index below) has to come after, not in SCHEMA.
   const cols = db.prepare('PRAGMA table_info(posts)').all().map((c) => c.name);
   if (!cols.includes('decline_reason')) db.exec('ALTER TABLE posts ADD COLUMN decline_reason TEXT');
   if (!cols.includes('deleted_at')) db.exec('ALTER TABLE posts ADD COLUMN deleted_at TEXT');
+  // Pre-areas rows were all CMP lines, which is exactly what the default gives.
+  if (!cols.includes('area')) {
+    db.exec(`ALTER TABLE posts ADD COLUMN area TEXT NOT NULL DEFAULT '${DEFAULT_AREA}'`);
+  }
+
+  db.exec('CREATE INDEX IF NOT EXISTS idx_posts_line_shift ON posts(area, table_no, shift_id)');
+  // Superseded by idx_posts_line_shift — nothing looks a line up without its area.
+  db.exec('DROP INDEX IF EXISTS idx_posts_table_shift');
 
   const stmts = {
     insertPost: db.prepare(
-      `INSERT INTO posts (table_no, note, photo_path, thumb_path, status, shift_id, created_at)
-       VALUES (@table_no, @note, @photo_path, @thumb_path, 'pending', @shift_id, @created_at)`
+      `INSERT INTO posts (area, table_no, note, photo_path, thumb_path, status, shift_id, created_at)
+       VALUES (@area, @table_no, @note, @photo_path, @thumb_path, 'pending', @shift_id, @created_at)`
     ),
     getPost: db.prepare('SELECT * FROM posts WHERE id = ?'),
 
-    // Live views exclude deleted posts.
+    // Live views exclude deleted posts. The hub board takes the whole shift
+    // (every area) and splits it into columns itself.
     listByShift: db.prepare(
       `SELECT * FROM posts WHERE shift_id = ? AND deleted_at IS NULL
        ORDER BY datetime(created_at) DESC, id DESC`
     ),
-    listByTableShift: db.prepare(
-      `SELECT * FROM posts WHERE table_no = ? AND shift_id = ? AND deleted_at IS NULL
+    listByLineShift: db.prepare(
+      `SELECT * FROM posts
+       WHERE area = ? AND table_no = ? AND shift_id = ? AND deleted_at IS NULL
        ORDER BY datetime(created_at) DESC, id DESC`
     ),
 
@@ -82,10 +99,10 @@ export function createDb(location = ':memory:') {
     restore: db.prepare('UPDATE posts SET deleted_at = NULL WHERE id = ?'),
     insertFb: db.prepare('INSERT INTO feedback (post_id, text, created_at) VALUES (?, ?, ?)'),
     getFb: db.prepare('SELECT * FROM feedback WHERE id = ?'),
-    fbForTableShift: db.prepare(
+    fbForLineShift: db.prepare(
       `SELECT f.* FROM feedback f
        JOIN posts p ON p.id = f.post_id
-       WHERE p.table_no = ? AND p.shift_id = ? AND p.deleted_at IS NULL
+       WHERE p.area = ? AND p.table_no = ? AND p.shift_id = ? AND p.deleted_at IS NULL
        ORDER BY datetime(f.created_at) DESC, f.id DESC`
     ),
   };
@@ -99,6 +116,7 @@ export function createDb(location = ':memory:') {
 
   function createPost(o) {
     const info = stmts.insertPost.run({
+      area: o.area || DEFAULT_AREA,
       table_no: o.table_no,
       note: o.note ?? '',
       photo_path: o.photo_path,
@@ -114,8 +132,8 @@ export function createDb(location = ':memory:') {
     createPost,
     getPost,
     listPostsByShift: (shift_id) => withFeedback(stmts.listByShift.all(shift_id)),
-    listPostsByTableShift: (table_no, shift_id) =>
-      withFeedback(stmts.listByTableShift.all(table_no, shift_id)),
+    listPostsByLineShift: (area, table_no, shift_id) =>
+      withFeedback(stmts.listByLineShift.all(area, table_no, shift_id)),
     listPostsByDate: (date) => withFeedback(stmts.listByDate.all(date)),
     listHistoryDates: () => stmts.historyDates.all(),
     approve: (id) => stmts.approve.run(id).changes > 0,
@@ -126,7 +144,8 @@ export function createDb(location = ':memory:') {
       const info = stmts.insertFb.run(post_id, text, created_at);
       return stmts.getFb.get(info.lastInsertRowid);
     },
-    listFeedbackForTableShift: (table_no, shift_id) => stmts.fbForTableShift.all(table_no, shift_id),
+    listFeedbackForLineShift: (area, table_no, shift_id) =>
+      stmts.fbForLineShift.all(area, table_no, shift_id),
     listFeedbackForPost: (post_id) => stmts.fbForPost.all(post_id),
     close: () => db.close(),
   };

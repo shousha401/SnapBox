@@ -13,7 +13,7 @@ const app = createApp({
   uploadsDir: config.uploadsDir,
   publicDir: config.publicDir,
   pin: config.pin,
-  tableCount: config.tableCount,
+  areas: config.areas,
   shiftStarts: config.shiftStarts,
 });
 
@@ -21,7 +21,9 @@ const server = app.listen(config.port, () => {
   console.log(`SnapBox listening on http://0.0.0.0:${config.port}`);
   console.log(`  start  -> /`);
   console.log(`  hub    -> /hub`);
-  console.log(`  tables -> /table/1 .. /table/${config.tableCount}`);
+  for (const a of config.areas) {
+    console.log(`  ${a.label.padEnd(6)} -> /line/${a.key}/1 .. /line/${a.key}/${a.lines}`);
+  }
   if (!config.pin) {
     console.log('  WARNING: SNAPBOX_PIN is not set — approve/delete/feedback are OPEN to the network.');
   }

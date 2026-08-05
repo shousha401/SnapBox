@@ -11,6 +11,9 @@
   --ok: #2f9e8f;
   --radius: 14px;
   --shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 6px 18px rgba(0, 0, 0, 0.05);
+  /* sticky layers on the hub: header, then the area tabs, then column headings */
+  --header-h: 57px;
+  --tabs-h: 50px;
 }
 
 * { box-sizing: border-box; }
@@ -74,6 +77,33 @@ body.tablet main {
 body.tablet.flash { animation: flash .6s ease; }
 @keyframes flash { 0%, 100% { background: var(--bg); } 30% { background: #fff3d6; } }
 
+/* ---------------- Area tabs (hub) ---------------- */
+.tabs {
+  display: flex; gap: 8px; padding: 8px 14px; background: var(--surface);
+  border-bottom: 1px solid var(--line); position: sticky; top: var(--header-h);
+  z-index: 4; overflow-x: auto; min-height: var(--tabs-h);
+}
+.tab {
+  display: flex; align-items: center; gap: 7px; flex: none;
+  font-size: 14px; font-weight: 700; padding: 8px 14px; border-radius: 999px;
+  color: var(--muted); background: var(--bg); border-color: transparent;
+}
+.tab:hover { color: var(--ink); }
+.tab.active { background: #d7f0eb; color: var(--accent-ink); border-color: #bfe5dd; }
+.tab-count {
+  font-size: 11px; font-weight: 800; min-width: 20px; padding: 1px 6px;
+  border-radius: 999px; background: var(--warn); color: #fff; text-align: center;
+}
+
+/* the area a line belongs to — on hub headings, history cards and the tablet */
+.area-pill {
+  font-size: 11px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase;
+  padding: 2px 7px; border-radius: 999px; background: #e6e8ec; color: #41464f;
+  vertical-align: middle;
+}
+.area-pill.cmp { background: #dde7fb; color: #274a91; }
+.area-pill.gff { background: #fde6cf; color: #8a4d10; }
+
 /* ---------------- Hub page ---------------- */
 body.hub main {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
@@ -82,8 +112,9 @@ body.hub main {
 .col { background: transparent; }
 .col > h2 {
   margin: 0 0 10px; font-size: 14px; text-transform: uppercase; letter-spacing: .04em;
-  color: var(--muted); position: sticky; top: 57px; background: var(--bg);
-  padding: 6px 0; border-bottom: 2px solid var(--line); z-index: 2;
+  color: var(--muted); position: sticky; top: calc(var(--header-h) + var(--tabs-h));
+  background: var(--bg); padding: 6px 0; border-bottom: 2px solid var(--line); z-index: 2;
+  display: flex; align-items: center; gap: 7px;
 }
 .col-body { display: flex; flex-direction: column; gap: 12px; min-height: 20px; }
 .col-empty { color: var(--muted); font-size: 14px; padding: 8px 0; }
@@ -131,7 +162,7 @@ body.hub main {
 }
 .dl-btn:hover { background: #eef0f2; border-color: var(--accent); }
 /* ---------------- Landing / role picker ---------------- */
-body.landing main { max-width: 720px; margin: 0 auto; padding: 32px 16px; }
+body.landing main { max-width: 940px; margin: 0 auto; padding: 32px 16px; }
 .choice-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
 .choice-card {
   display: flex; flex-direction: column; align-items: center; gap: 8px;

@@ -1,7 +1,9 @@
-// History page (managers): browse past photos by date, filter by line + status,
-// download, delete (archive) and restore. Deleted photos are never erased — pick
-// "🗑 Deleted" in the Show dropdown to find them again.
+// History page (managers): browse past photos by date across both production
+// areas, filter by area + line + status, download, delete (archive) and restore.
+// Deleted photos are never erased — pick "🗑 Deleted" in the Show dropdown to
+// find them again.
 const dateInput = document.getElementById('date');
+const areaSel = document.getElementById('area');
 const lineSel = document.getElementById('line');
 const statusSel = document.getElementById('status');
 const days = document.getElementById('days');
@@ -14,8 +16,13 @@ const lightboxImg = document.getElementById('lightboxImg');
 const lightboxDl = document.getElementById('lightboxDl');
 
 let posts = []; // everything for the selected date, deleted ones included
+let areas = [
+  { key: 'cmp', label: 'CMP', lines: 4 },
+  { key: 'gff', label: 'GFF', lines: 2 },
+];
 
 const action = (method, url, body) => window.SnapBoxPin.action(method, url, body);
+const areaLabel = (key) => (areas.find((a) => a.key === key) || {}).label || String(key).toUpperCase();
 
 function setStatus(text, kind = '') {
   statusEl.textContent = text;
@@ -76,6 +83,7 @@ function markActiveDay() {
 // ---- cards ----
 function buildCard(p) {
   const archived = !!p.deleted_at;
+  const line = `${areaLabel(p.area)} Line ${p.table_no}`;
 
   const el = document.createElement('article');
   el.className = 'card ' + p.status + (archived ? ' archived' : '');
@@ -84,7 +92,7 @@ function buildCard(p) {
   img.className = 'thumb';
   img.loading = 'lazy';
   img.src = p.thumb_path;
-  img.alt = `Line ${p.table_no} photo`;
+  img.alt = `${line} photo`;
   img.addEventListener('click', () => {
     lightboxImg.src = p.photo_path;
     lightboxDl.href = `/api/posts/${p.id}/download`;
@@ -96,7 +104,9 @@ function buildCard(p) {
 
   const meta = document.createElement('div');
   meta.className = 'meta';
-  meta.innerHTML = `<span><strong>Line ${p.table_no}</strong> · ${fmtTime(p.created_at)}</span>`;
+  meta.innerHTML =
+    `<span><span class="area-pill ${escapeHtml(p.area)}">${escapeHtml(areaLabel(p.area))}</span>` +
+    ` <strong>Line ${p.table_no}</strong> · ${fmtTime(p.created_at)}</span>`;
   const badge = document.createElement('span');
   badge.className = 'badge ' + p.status;
   badge.textContent = p.status;
@@ -174,11 +184,13 @@ function buildCard(p) {
 
 // ---- render ----
 function render() {
-  const line = lineSel.value;
+  const area = areaSel.value;
+  const line = lineSel.value; // "" or "<area>:<n>", so CMP 2 and GFF 2 stay apart
   const status = statusSel.value;
 
   const shown = posts.filter((p) => {
-    if (line && String(p.table_no) !== line) return false;
+    if (area && p.area !== area) return false;
+    if (line && `${p.area}:${p.table_no}` !== line) return false;
     if (status === 'deleted') return !!p.deleted_at;
     if (p.deleted_at) return false; // deleted are hidden unless asked for
     return !status || p.status === status;
@@ -223,27 +235,47 @@ async function refresh() {
 document.getElementById('lightboxClose').addEventListener('click', () => (lightbox.hidden = true));
 lightbox.addEventListener('click', (e) => { if (e.target === lightbox) lightbox.hidden = true; });
 dateInput.addEventListener('change', load);
-lineSel.addEventListener('change', render);
 statusSel.addEventListener('change', render);
+lineSel.addEventListener('change', render);
+
+// Narrowing to one area drops a line picked from a different one, so the two
+// dropdowns can never contradict each other.
+areaSel.addEventListener('change', () => {
+  if (areaSel.value && !lineSel.value.startsWith(areaSel.value + ':')) lineSel.value = '';
+  render();
+});
+
+function buildFilters() {
+  for (const a of areas) {
+    const o = document.createElement('option');
+    o.value = a.key;
+    o.textContent = `${a.label} lines`;
+    areaSel.appendChild(o);
+
+    const group = document.createElement('optgroup');
+    group.label = a.label;
+    for (let i = 1; i <= a.lines; i++) {
+      const opt = document.createElement('option');
+      opt.value = `${a.key}:${i}`;
+      opt.textContent = `${a.label} Line ${i}`;
+      group.appendChild(opt);
+    }
+    lineSel.appendChild(group);
+  }
+}
 
 async function init() {
-  let tableCount = 4;
   let pinRequired = false;
   try {
     const cfg = await (await fetch('/api/config')).json();
-    tableCount = cfg.tableCount || 4;
+    if (cfg.areas && cfg.areas.length) areas = cfg.areas;
     pinRequired = !!cfg.pinRequired;
   } catch {
     /* defaults */
   }
   window.SnapBoxPin.init({ required: pinRequired, onStatus: setStatus });
 
-  for (let i = 1; i <= tableCount; i++) {
-    const o = document.createElement('option');
-    o.value = String(i);
-    o.textContent = `Line ${i}`;
-    lineSel.appendChild(o);
-  }
+  buildFilters();
   dateInput.value = todayStr();
   await loadDays();
   await load();

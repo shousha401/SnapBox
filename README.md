@@ -2,25 +2,41 @@
 
 A QC-photo hub for the production floor. Each line **tablet** snaps a photo + note
 and posts it to a shared **hub**; supervisors watch a live board and **approve**,
-**delete**, or **send feedback** — which shows up right back on that table's tablet.
+**delete**, or **send feedback** — which shows up right back on that line's tablet.
 
 Replaces the old "text the photo to someone" step with one screen everyone on the
 network can see.
 
+## Areas
+
+The floor is split into two **areas**, each with its own lines:
+
+| Area  | Lines       | Tablet URL                       |
+| ----- | ----------- | -------------------------------- |
+| **CMP** | 1 … 4     | `/line/cmp/1` … `/line/cmp/4`   |
+| **GFF** | 1 … 2     | `/line/gff/1` … `/line/gff/2`   |
+
+A post belongs to an *(area, line)* pair, so **CMP Line 1 and GFF Line 1 are
+different lines** — separate columns on the hub, separate feedback, separate
+tablets. The Manager Hub sees **both areas**, with **CMP / GFF / All** tabs.
+
 ## How it works
 
-- **Tablets** — one per line at `/table/1` … `/table/4`. Live camera in the browser
+- **Tablets** — one per line, at `/line/<area>/<n>`. Live camera in the browser
   (falls back to the device photo picker), a note box, and a **Send** button.
-  Feedback from supervisors appears at the bottom of the page.
-- **Hub** — `/hub` on supervisor PCs. Live feed grouped by table, newest on top.
-  Each post has **Approve · Feedback · Delete** (gated behind a shared PIN).
+  Feedback from supervisors appears at the bottom of the page. A tablet only ever
+  sees its own line's posts and feedback.
+- **Hub** — `/hub` on supervisor PCs. Live feed grouped by line across both areas,
+  newest on top, with **CMP / GFF / All** tabs (the choice is remembered per PC,
+  and a post landing on a hidden area counts up on its tab). Each post has
+  **Approve · Feedback · Delete** (gated behind a shared PIN).
 - **Live updates** over Server-Sent Events — posts appear on the hub instantly and
-  feedback lands on the tablet instantly.
+  feedback lands on the right tablet instantly.
 - **Shifts** — the hub shows the *current shift* only, but nothing is deleted on a
   shift boundary; everything stays in the database (`shift_id` is just a view
   filter).
-- **History** — `/history` on manager PCs. Browse any past day, filter by line and
-  by status, click a photo to enlarge, **download** it, **delete** it, or
+- **History** — `/history` on manager PCs. Browse any past day, filter by area,
+  line and status, click a photo to enlarge, **download** it, **delete** it, or
   **restore** a deleted one.
 - **Nothing is ever erased** — "Delete" is an *archive*: it sets `deleted_at`, so
   the post leaves the live board and the tablets but keeps its row **and its photo
@@ -31,12 +47,17 @@ network can see.
 
 ```bash
 npm install
-npm start           # http://<this-machine>:4200  (redirects to /hub)
+npm start           # http://<this-machine>:4200
 ```
 
 Then open:
+- Start:  `http://<vm-ip>:4200/` — pick CMP Lines, GFF Lines, or Manager Hub
 - Hub:    `http://<vm-ip>:4200/hub`
-- Tables: `http://<vm-ip>:4200/table/1` … `/table/4`
+- Lines:  `http://<vm-ip>:4200/line/cmp/1` … `/line/gff/2`
+
+> Upgrading an existing install? Nothing to do — the database migrates itself on
+> first start and every post already in it stays a **CMP** post. Old `/table/N`
+> tablet bookmarks keep working and mean CMP line N.
 
 > Camera access in the browser requires a secure context. `localhost` works; on the
 > LAN, tablets may need the hub served over HTTPS (or the origin allow-listed) for
@@ -51,30 +72,42 @@ pm2 save
 
 ## Configuration (env vars)
 
-| Var              | Default            | Purpose                                             |
-| ---------------- | ------------------ | --------------------------------------------------- |
-| `PORT`           | `4200`             | HTTP port                                            |
-| `SNAPBOX_PIN`    | _(empty)_          | Shared supervisor PIN. **Empty = actions are OPEN.** |
-| `SNAPBOX_TABLES` | `4`                | Number of line tables                               |
-| `SNAPBOX_SHIFTS` | _(empty)_          | Shift starts, e.g. `06:00,18:00`. Empty = one/day.  |
-| `SNAPBOX_DB`     | `data/snapbox.db`  | SQLite file path                                     |
-| `SNAPBOX_UPLOADS`| `uploads/`         | Where photos are stored                             |
+| Var                 | Default            | Purpose                                             |
+| ------------------- | ------------------ | --------------------------------------------------- |
+| `PORT`              | `4200`             | HTTP port                                            |
+| `SNAPBOX_PIN`       | _(empty)_          | Shared supervisor PIN. **Empty = actions are OPEN.** |
+| `SNAPBOX_CMP_LINES` | `4`                | Number of CMP lines                                  |
+| `SNAPBOX_GFF_LINES` | `2`                | Number of GFF lines                                  |
+| `SNAPBOX_SHIFTS`    | _(empty)_          | Shift starts, e.g. `06:00,18:00`. Empty = one/day.  |
+| `SNAPBOX_DB`        | `data/snapbox.db`  | SQLite file path                                     |
+| `SNAPBOX_UPLOADS`   | `uploads/`         | Where photos are stored                             |
+
+`SNAPBOX_TABLES` — the name from before areas existed — is still read as the CMP
+line count, so an existing `.env` or PM2 config keeps working untouched.
 
 ## API
 
-| Method   | Route                          | Notes                            |
-| -------- | ------------------------------ | -------------------------------- |
-| `POST`   | `/api/posts`                   | multipart: `photo`, `table_no`, `note` |
-| `GET`    | `/api/posts?shift=current`     | feed for a shift                 |
-| `POST`   | `/api/posts/:id/approve`       | 🔒 PIN                            |
-| `DELETE` | `/api/posts/:id`               | 🔒 PIN — archives it (never erases) |
-| `POST`   | `/api/posts/:id/restore`       | 🔒 PIN — un-deletes it           |
-| `POST`   | `/api/posts/:id/feedback`      | 🔒 PIN — `{ text }`              |
-| `GET`    | `/api/table/:n/feedback`       | this table's feedback, this shift |
-| `GET`    | `/api/posts/:id/download`      | photo as an attachment, named `SnapBox_Line2_2026-07-13_1604.jpg` |
-| `GET`    | `/api/history?date=YYYY-MM-DD` | every post on a calendar date    |
-| `GET`    | `/api/history/dates`           | days that have posts + counts    |
-| `GET`    | `/api/stream?role=hub\|table`  | SSE live updates                 |
+`:area` is `cmp` or `gff`.
+
+| Method   | Route                              | Notes                            |
+| -------- | ---------------------------------- | -------------------------------- |
+| `POST`   | `/api/posts`                       | multipart: `photo`, `area`, `table_no`, `note` (no `area` = `cmp`) |
+| `GET`    | `/api/posts?shift=current`         | feed for a shift, **both areas**  |
+| `GET`    | `/api/config`                      | areas + line counts, PIN required? |
+| `POST`   | `/api/posts/:id/approve`           | 🔒 PIN                            |
+| `POST`   | `/api/posts/:id/decline`           | 🔒 PIN — `{ reason }` required    |
+| `DELETE` | `/api/posts/:id`                   | 🔒 PIN — archives it (never erases) |
+| `POST`   | `/api/posts/:id/restore`           | 🔒 PIN — un-deletes it           |
+| `POST`   | `/api/posts/:id/feedback`          | 🔒 PIN — `{ text }`              |
+| `GET`    | `/api/lines/:area/:n/posts`        | this line's posts, this shift    |
+| `GET`    | `/api/lines/:area/:n/feedback`     | this line's feedback, this shift |
+| `GET`    | `/api/posts/:id/download`          | photo as an attachment, named `SnapBox_GFF-Line2_2026-07-13_1604.jpg` |
+| `GET`    | `/api/history?date=YYYY-MM-DD`     | every post on a calendar date    |
+| `GET`    | `/api/history/dates`               | days that have posts + counts    |
+| `GET`    | `/api/stream?role=hub\|table&area=&n=` | SSE live updates             |
+
+`GET /api/table/:n/posts` and `/api/table/:n/feedback` still answer for the CMP
+line of that number, so tablets bookmarked before areas existed keep working.
 
 ## Tests
 
@@ -82,8 +115,10 @@ pm2 save
 npm test
 ```
 
-Vitest + supertest cover the shift logic, the SQLite data layer, and every API
-endpoint (happy path, bad input, and the PIN gate). CI runs them on every push.
+Vitest + supertest cover the shift logic, the area config, the SQLite data layer
+(including the migration of a pre-areas database), and every API endpoint — happy
+path, bad input, the PIN gate, and that CMP and GFF never leak into each other.
+CI runs them on every push.
 
 ## Stack
 
