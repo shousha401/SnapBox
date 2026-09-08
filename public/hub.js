@@ -20,6 +20,8 @@ const TAB_KEY = 'snapbox_hub_tab';
 let areas = [
   { key: 'cmp', label: 'CMP', lines: 4 },
   { key: 'gff', label: 'GFF', lines: 2 },
+  { key: 'rte', label: 'RTE', lines: 1 },
+  { key: 'packoff', label: 'Pack Off', lines: 1 },
 ];
 let tab = localStorage.getItem(TAB_KEY) || 'all';
 const cards = new Map(); // post id -> { el, fbUl, badge, reason }
@@ -51,7 +53,7 @@ function buildTabs() {
   tabsNav.innerHTML = '';
   tabEls.clear();
   const defs = [{ value: 'all', label: 'All lines' }].concat(
-    areas.map((a) => ({ value: a.key, label: `${a.label} Lines` }))
+    areas.map((a) => ({ value: a.key, label: a.lines === 1 ? a.label : `${a.label} Lines` }))
   );
   for (const d of defs) {
     const btn = document.createElement('button');

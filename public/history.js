@@ -19,6 +19,8 @@ let posts = []; // everything for the selected date, deleted ones included
 let areas = [
   { key: 'cmp', label: 'CMP', lines: 4 },
   { key: 'gff', label: 'GFF', lines: 2 },
+  { key: 'rte', label: 'RTE', lines: 1 },
+  { key: 'packoff', label: 'Pack Off', lines: 1 },
 ];
 
 const action = (method, url, body) => window.SnapBoxPin.action(method, url, body);
@@ -249,7 +251,7 @@ function buildFilters() {
   for (const a of areas) {
     const o = document.createElement('option');
     o.value = a.key;
-    o.textContent = `${a.label} lines`;
+    o.textContent = a.lines === 1 ? a.label : `${a.label} lines`;
     areaSel.appendChild(o);
 
     const group = document.createElement('optgroup');

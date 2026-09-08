@@ -14,7 +14,10 @@ module.exports = {
         PORT: 4200,
         // Set a real PIN before going live — this gates approve/delete/feedback.
         SNAPBOX_PIN: 'change-me',
-        SNAPBOX_TABLES: 4,
+        SNAPBOX_TABLES: 4, // CMP line count (pre-areas name, still honoured)
+        SNAPBOX_GFF_LINES: 2,
+        SNAPBOX_RTE_LINES: 1,
+        SNAPBOX_PACKOFF_LINES: 1,
         // Optional multi-shift boundaries, e.g. '06:00,18:00'. Empty = one daily shift.
         SNAPBOX_SHIFTS: '',
       },

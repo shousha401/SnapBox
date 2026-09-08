@@ -21,8 +21,11 @@ const server = app.listen(config.port, () => {
   console.log(`SnapBox listening on http://0.0.0.0:${config.port}`);
   console.log(`  start  -> /`);
   console.log(`  hub    -> /hub`);
+  const pad = Math.max(6, ...config.areas.map((a) => a.label.length));
   for (const a of config.areas) {
-    console.log(`  ${a.label.padEnd(6)} -> /line/${a.key}/1 .. /line/${a.key}/${a.lines}`);
+    const lines =
+      a.lines === 1 ? `/line/${a.key}/1` : `/line/${a.key}/1 .. /line/${a.key}/${a.lines}`;
+    console.log(`  ${a.label.padEnd(pad)} -> ${lines}`);
   }
   if (!config.pin) {
     console.log('  WARNING: SNAPBOX_PIN is not set — approve/delete/feedback are OPEN to the network.');

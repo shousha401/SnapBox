@@ -9,16 +9,21 @@ network can see.
 
 ## Areas
 
-The floor is split into two **areas**, each with its own lines:
+The floor is split into four **areas**, each with its own lines. RTE and Pack Off
+are single-station areas — one line apiece:
 
 | Area  | Lines       | Tablet URL                       |
 | ----- | ----------- | -------------------------------- |
 | **CMP** | 1 … 4     | `/line/cmp/1` … `/line/cmp/4`   |
 | **GFF** | 1 … 2     | `/line/gff/1` … `/line/gff/2`   |
+| **RTE** | 1         | `/line/rte/1`                    |
+| **Pack Off** | 1    | `/line/packoff/1`                |
 
 A post belongs to an *(area, line)* pair, so **CMP Line 1 and GFF Line 1 are
 different lines** — separate columns on the hub, separate feedback, separate
-tablets. The Manager Hub sees **both areas**, with **CMP / GFF / All** tabs.
+tablets. The Manager Hub sees **every area**, with **CMP / GFF / RTE / Pack Off /
+All** tabs. On the start page, picking a single-station area skips the line picker
+and opens its tablet straight away.
 
 ## How it works
 
@@ -26,9 +31,9 @@ tablets. The Manager Hub sees **both areas**, with **CMP / GFF / All** tabs.
   (falls back to the device photo picker), a note box, and a **Send** button.
   Feedback from supervisors appears at the bottom of the page. A tablet only ever
   sees its own line's posts and feedback.
-- **Hub** — `/hub` on supervisor PCs. Live feed grouped by line across both areas,
-  newest on top, with **CMP / GFF / All** tabs (the choice is remembered per PC,
-  and a post landing on a hidden area counts up on its tab). Each post has
+- **Hub** — `/hub` on supervisor PCs. Live feed grouped by line across every area,
+  newest on top, with one tab per area plus **All** (the choice is remembered per
+  PC, and a post landing on a hidden area counts up on its tab). Each post has
   **Approve · Feedback · Delete** (gated behind a shared PIN).
 - **Live updates** over Server-Sent Events — posts appear on the hub instantly and
   feedback lands on the right tablet instantly.
@@ -51,9 +56,10 @@ npm start           # http://<this-machine>:4200
 ```
 
 Then open:
-- Start:  `http://<vm-ip>:4200/` — pick CMP Lines, GFF Lines, or Manager Hub
+- Start:  `http://<vm-ip>:4200/` — pick a line's area or the Manager Hub
 - Hub:    `http://<vm-ip>:4200/hub`
-- Lines:  `http://<vm-ip>:4200/line/cmp/1` … `/line/gff/2`
+- Lines:  `http://<vm-ip>:4200/line/cmp/1` … `/line/cmp/4`, `/line/gff/1` …
+  `/line/gff/2`, `/line/rte/1`, `/line/packoff/1`
 
 > Upgrading an existing install? Nothing to do — the database migrates itself on
 > first start and every post already in it stays a **CMP** post. Old `/table/N`
@@ -78,6 +84,8 @@ pm2 save
 | `SNAPBOX_PIN`       | _(empty)_          | Shared supervisor PIN. **Empty = actions are OPEN.** |
 | `SNAPBOX_CMP_LINES` | `4`                | Number of CMP lines                                  |
 | `SNAPBOX_GFF_LINES` | `2`                | Number of GFF lines                                  |
+| `SNAPBOX_RTE_LINES` | `1`                | Number of RTE lines                                  |
+| `SNAPBOX_PACKOFF_LINES` | `1`            | Number of Pack Off lines                             |
 | `SNAPBOX_SHIFTS`    | _(empty)_          | Shift starts, e.g. `06:00,18:00`. Empty = one/day.  |
 | `SNAPBOX_DB`        | `data/snapbox.db`  | SQLite file path                                     |
 | `SNAPBOX_UPLOADS`   | `uploads/`         | Where photos are stored                             |
@@ -87,12 +95,12 @@ line count, so an existing `.env` or PM2 config keeps working untouched.
 
 ## API
 
-`:area` is `cmp` or `gff`.
+`:area` is `cmp`, `gff`, `rte` or `packoff`.
 
 | Method   | Route                              | Notes                            |
 | -------- | ---------------------------------- | -------------------------------- |
 | `POST`   | `/api/posts`                       | multipart: `photo`, `area`, `table_no`, `note` (no `area` = `cmp`) |
-| `GET`    | `/api/posts?shift=current`         | feed for a shift, **both areas**  |
+| `GET`    | `/api/posts?shift=current`         | feed for a shift, **every area**  |
 | `GET`    | `/api/config`                      | areas + line counts, PIN required? |
 | `POST`   | `/api/posts/:id/approve`           | 🔒 PIN                            |
 | `POST`   | `/api/posts/:id/decline`           | 🔒 PIN — `{ reason }` required    |
@@ -117,7 +125,7 @@ npm test
 
 Vitest + supertest cover the shift logic, the area config, the SQLite data layer
 (including the migration of a pre-areas database), and every API endpoint — happy
-path, bad input, the PIN gate, and that CMP and GFF never leak into each other.
+path, bad input, the PIN gate, and that the areas never leak into each other.
 CI runs them on every push.
 
 ## Stack

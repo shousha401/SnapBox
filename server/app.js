@@ -212,7 +212,10 @@ export function createApp(opts) {
     const p2 = (n) => String(n).padStart(2, '0');
     const stamp = `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}_${p2(d.getHours())}${p2(d.getMinutes())}`;
     const ext = path.extname(post.photo_path) || '.jpg';
-    const areaLabel = (findArea(areas, post.area)?.label || post.area).toUpperCase();
+    // Labels can carry spaces ("Pack Off"); filenames should not.
+    const areaLabel = (findArea(areas, post.area)?.label || post.area)
+      .toUpperCase()
+      .replace(/[^A-Z0-9]+/g, '');
     res.download(file, `SnapBox_${areaLabel}-Line${post.table_no}_${stamp}${ext}`);
   });
 
