@@ -12,7 +12,7 @@ const publicDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..
 
 const PIN = '4242';
 const FIXED = new Date(2026, 6, 13, 10, 0); // 2026-07-13 10:00 local -> shift '2026-07-13'
-const AREAS = parseAreas({}); // CMP 4 lines, GFF 2, RTE 4, Pack Off 4
+const AREAS = parseAreas({}); // CMP 4 lines, GFF 2, RTE 1, Pack Off 1
 
 // The server stores the received bytes as-is (no image processing), so any
 // buffer sent with an image content-type is enough to exercise the endpoints.
@@ -102,24 +102,20 @@ describe('POST /api/posts', () => {
     expect(res.body.error).toBe('bad_table');
   });
 
-  it('gives RTE and Pack Off four lines each, kept apart from every other area', async () => {
-    const rte = await post(4, 'rte four', 'rte');
-    const packoff = await post(4, 'pack off four', 'packoff');
+  it('takes RTE and Pack Off on line 1 only, each kept to itself', async () => {
+    const rte = await post(1, 'rte one', 'rte');
+    const packoff = await post(1, 'pack off one', 'packoff');
     expect(rte.body.area).toBe('rte');
     expect(packoff.body.area).toBe('packoff');
 
-    // four lines apiece — there is no line 5
-    expect((await post(5, 'no such line', 'rte')).body.error).toBe('bad_table');
-    expect((await post(5, 'no such line', 'packoff')).body.error).toBe('bad_table');
+    // one station apiece — there is no line 2 in either
+    expect((await post(2, 'no such line', 'rte')).body.error).toBe('bad_table');
+    expect((await post(2, 'no such line', 'packoff')).body.error).toBe('bad_table');
 
-    // same line number in four areas, four separate feeds
-    const cmp = await post(4, 'cmp four', 'cmp');
-    const rteOnly = await request(app).get('/api/lines/rte/4/posts');
+    const rteOnly = await request(app).get('/api/lines/rte/1/posts');
     expect(rteOnly.body.posts.map((p) => p.id)).toEqual([rte.body.id]);
-    const packOnly = await request(app).get('/api/lines/packoff/4/posts');
+    const packOnly = await request(app).get('/api/lines/packoff/1/posts');
     expect(packOnly.body.posts.map((p) => p.id)).toEqual([packoff.body.id]);
-    const cmpOnly = await request(app).get('/api/lines/cmp/4/posts');
-    expect(cmpOnly.body.posts.map((p) => p.id)).toEqual([cmp.body.id]);
   });
 
   it('files a post with no area under CMP, as pre-areas tablets sent them', async () => {
@@ -333,9 +329,9 @@ describe('GET /api/posts/:id/download', () => {
   });
 
   it('strips the space out of a two-word area label ("Pack Off")', async () => {
-    const { body } = await post(2, 'pack off two', 'packoff');
+    const { body } = await post(1, 'pack off one', 'packoff');
     const res = await request(app).get(`/api/posts/${body.id}/download`);
-    expect(res.headers['content-disposition']).toMatch(/SnapBox_PACKOFF-Line2_2026-07-13_1000\.jpg/);
+    expect(res.headers['content-disposition']).toMatch(/SnapBox_PACKOFF-Line1_2026-07-13_1000\.jpg/);
   });
 
   it('404s for a post that does not exist', async () => {
@@ -394,8 +390,8 @@ describe('GET /api/config', () => {
       areas: [
         { key: 'cmp', label: 'CMP', lines: 4 },
         { key: 'gff', label: 'GFF', lines: 2 },
-        { key: 'rte', label: 'RTE', lines: 4 },
-        { key: 'packoff', label: 'Pack Off', lines: 4 },
+        { key: 'rte', label: 'RTE', lines: 1 },
+        { key: 'packoff', label: 'Pack Off', lines: 1 },
       ],
       pinRequired: true,
     });
@@ -417,8 +413,8 @@ describe('static pages', () => {
   it('serves the tablet page for a line in either area, and the stylesheet', async () => {
     expect((await request(pagesApp).get('/line/cmp/2')).status).toBe(200);
     expect((await request(pagesApp).get('/line/gff/1')).status).toBe(200);
-    expect((await request(pagesApp).get('/line/rte/4')).status).toBe(200);
-    expect((await request(pagesApp).get('/line/packoff/4')).status).toBe(200);
+    expect((await request(pagesApp).get('/line/rte/1')).status).toBe(200);
+    expect((await request(pagesApp).get('/line/packoff/1')).status).toBe(200);
     expect((await request(pagesApp).get('/table/2')).status).toBe(200); // old bookmark
     expect((await request(pagesApp).get('/styles.css')).status).toBe(200);
   });
@@ -434,8 +430,8 @@ describe('static pages', () => {
     expect(res.status).toBe(200);
     expect(res.text).toContain('CMP Lines');
     expect(res.text).toContain('GFF Lines');
-    expect(res.text).toContain('RTE Lines');
-    expect(res.text).toContain('Pack Off Lines');
+    expect(res.text).toContain('RTE Line');
+    expect(res.text).toContain('Pack Off Line');
     expect(res.text).toContain('Manager Hub');
   });
 });

@@ -111,7 +111,9 @@ body.hub main {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
   gap: 12px; padding: 14px; align-items: start;
 }
-.col { background: transparent; }
+/* A tab showing one or two lines (RTE, Pack Off) would otherwise stretch its
+   column across the whole board — cap it so a card stays card-sized. */
+.col { background: transparent; max-width: 460px; }
 .col > h2 {
   margin: 0 0 10px; font-size: 14px; text-transform: uppercase; letter-spacing: .04em;
   color: var(--muted); position: sticky; top: calc(var(--header-h) + var(--tabs-h));

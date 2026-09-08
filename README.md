@@ -9,19 +9,21 @@ network can see.
 
 ## Areas
 
-The floor is split into four **areas**, each with its own lines:
+The floor is split into four **areas**, each with its own lines. RTE and Pack Off
+are single-station areas — one line apiece:
 
 | Area  | Lines       | Tablet URL                       |
 | ----- | ----------- | -------------------------------- |
 | **CMP** | 1 … 4     | `/line/cmp/1` … `/line/cmp/4`   |
 | **GFF** | 1 … 2     | `/line/gff/1` … `/line/gff/2`   |
-| **RTE** | 1 … 4     | `/line/rte/1` … `/line/rte/4`   |
-| **Pack Off** | 1 … 4 | `/line/packoff/1` … `/line/packoff/4` |
+| **RTE** | 1         | `/line/rte/1`                    |
+| **Pack Off** | 1    | `/line/packoff/1`                |
 
 A post belongs to an *(area, line)* pair, so **CMP Line 1 and GFF Line 1 are
 different lines** — separate columns on the hub, separate feedback, separate
 tablets. The Manager Hub sees **every area**, with **CMP / GFF / RTE / Pack Off /
-All** tabs.
+All** tabs. On the start page, picking a single-station area skips the line picker
+and opens its tablet straight away.
 
 ## How it works
 
@@ -56,9 +58,8 @@ npm start           # http://<this-machine>:4200
 Then open:
 - Start:  `http://<vm-ip>:4200/` — pick a line's area or the Manager Hub
 - Hub:    `http://<vm-ip>:4200/hub`
-- Lines:  `http://<vm-ip>:4200/line/<area>/<n>` — `/line/cmp/1` … `/line/cmp/4`,
-  `/line/gff/1` … `/line/gff/2`, `/line/rte/1` … `/line/rte/4`,
-  `/line/packoff/1` … `/line/packoff/4`
+- Lines:  `http://<vm-ip>:4200/line/cmp/1` … `/line/cmp/4`, `/line/gff/1` …
+  `/line/gff/2`, `/line/rte/1`, `/line/packoff/1`
 
 > Upgrading an existing install? Nothing to do — the database migrates itself on
 > first start and every post already in it stays a **CMP** post. Old `/table/N`
@@ -83,8 +84,8 @@ pm2 save
 | `SNAPBOX_PIN`       | _(empty)_          | Shared supervisor PIN. **Empty = actions are OPEN.** |
 | `SNAPBOX_CMP_LINES` | `4`                | Number of CMP lines                                  |
 | `SNAPBOX_GFF_LINES` | `2`                | Number of GFF lines                                  |
-| `SNAPBOX_RTE_LINES` | `4`                | Number of RTE lines                                  |
-| `SNAPBOX_PACKOFF_LINES` | `4`            | Number of Pack Off lines                             |
+| `SNAPBOX_RTE_LINES` | `1`                | Number of RTE lines                                  |
+| `SNAPBOX_PACKOFF_LINES` | `1`            | Number of Pack Off lines                             |
 | `SNAPBOX_SHIFTS`    | _(empty)_          | Shift starts, e.g. `06:00,18:00`. Empty = one/day.  |
 | `SNAPBOX_DB`        | `data/snapbox.db`  | SQLite file path                                     |
 | `SNAPBOX_UPLOADS`   | `uploads/`         | Where photos are stored                             |
