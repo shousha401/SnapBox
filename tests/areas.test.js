@@ -2,12 +2,12 @@ import { describe, it, expect } from 'vitest';
 import { parseAreas, findArea, lineLabel, DEFAULT_AREA } from '../server/areas.js';
 
 describe('parseAreas', () => {
-  it('defaults to CMP 4, GFF 2, and one line each for RTE and Pack Off', () => {
+  it('defaults to CMP 4, GFF 2, RTE 4 and Pack Off 4', () => {
     expect(parseAreas({})).toEqual([
       { key: 'cmp', label: 'CMP', lines: 4 },
       { key: 'gff', label: 'GFF', lines: 2 },
-      { key: 'rte', label: 'RTE', lines: 1 },
-      { key: 'packoff', label: 'Pack Off', lines: 1 },
+      { key: 'rte', label: 'RTE', lines: 4 },
+      { key: 'packoff', label: 'Pack Off', lines: 4 },
     ]);
   });
 
@@ -16,17 +16,17 @@ describe('parseAreas', () => {
       SNAPBOX_CMP_LINES: '6',
       SNAPBOX_GFF_LINES: '3',
       SNAPBOX_RTE_LINES: '2',
-      SNAPBOX_PACKOFF_LINES: '2',
+      SNAPBOX_PACKOFF_LINES: '1',
     });
-    expect(areas.map((a) => a.lines)).toEqual([6, 3, 2, 2]);
+    expect(areas.map((a) => a.lines)).toEqual([6, 3, 2, 1]);
   });
 
   it('still honours the pre-areas SNAPBOX_TABLES as the CMP line count', () => {
     const areas = parseAreas({ SNAPBOX_TABLES: '5' });
     expect(findArea(areas, 'cmp').lines).toBe(5);
     expect(findArea(areas, 'gff').lines).toBe(2); // untouched
-    expect(findArea(areas, 'rte').lines).toBe(1); // untouched
-    expect(findArea(areas, 'packoff').lines).toBe(1); // untouched
+    expect(findArea(areas, 'rte').lines).toBe(4); // untouched
+    expect(findArea(areas, 'packoff').lines).toBe(4); // untouched
   });
 
   it('prefers the area-specific var over the legacy one', () => {
@@ -66,8 +66,8 @@ describe('lineLabel', () => {
   it('names a line by its area', () => {
     expect(lineLabel(areas, 'cmp', 2)).toBe('CMP Line 2');
     expect(lineLabel(areas, 'gff', 1)).toBe('GFF Line 1');
-    expect(lineLabel(areas, 'rte', 1)).toBe('RTE Line 1');
-    expect(lineLabel(areas, 'packoff', 1)).toBe('Pack Off Line 1');
+    expect(lineLabel(areas, 'rte', 3)).toBe('RTE Line 3');
+    expect(lineLabel(areas, 'packoff', 4)).toBe('Pack Off Line 4');
   });
 
   it('falls back to the raw key for an unknown area', () => {

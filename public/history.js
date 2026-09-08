@@ -19,8 +19,8 @@ let posts = []; // everything for the selected date, deleted ones included
 let areas = [
   { key: 'cmp', label: 'CMP', lines: 4 },
   { key: 'gff', label: 'GFF', lines: 2 },
-  { key: 'rte', label: 'RTE', lines: 1 },
-  { key: 'packoff', label: 'Pack Off', lines: 1 },
+  { key: 'rte', label: 'RTE', lines: 4 },
+  { key: 'packoff', label: 'Pack Off', lines: 4 },
 ];
 
 const action = (method, url, body) => window.SnapBoxPin.action(method, url, body);

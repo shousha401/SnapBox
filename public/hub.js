@@ -20,8 +20,8 @@ const TAB_KEY = 'snapbox_hub_tab';
 let areas = [
   { key: 'cmp', label: 'CMP', lines: 4 },
   { key: 'gff', label: 'GFF', lines: 2 },
-  { key: 'rte', label: 'RTE', lines: 1 },
-  { key: 'packoff', label: 'Pack Off', lines: 1 },
+  { key: 'rte', label: 'RTE', lines: 4 },
+  { key: 'packoff', label: 'Pack Off', lines: 4 },
 ];
 let tab = localStorage.getItem(TAB_KEY) || 'all';
 const cards = new Map(); // post id -> { el, fbUl, badge, reason }

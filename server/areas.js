@@ -1,5 +1,5 @@
 // SnapBox covers four production areas — CMP, GFF, RTE and Pack Off — each with
-// its own lines. RTE and Pack Off are single-station areas: one line apiece.
+// its own lines.
 // A post belongs to an (area, line) pair, and `area` is what keeps GFF Line 1
 // apart from CMP Line 1 everywhere: the hub columns, each tablet's own feed, the
 // SSE targeting, and the history filters.
@@ -14,8 +14,8 @@ export const DEFAULT_AREA = 'cmp';
 const DEFS = [
   { key: 'cmp', label: 'CMP', lines: 4, env: 'SNAPBOX_CMP_LINES', legacyEnv: 'SNAPBOX_TABLES' },
   { key: 'gff', label: 'GFF', lines: 2, env: 'SNAPBOX_GFF_LINES' },
-  { key: 'rte', label: 'RTE', lines: 1, env: 'SNAPBOX_RTE_LINES' },
-  { key: 'packoff', label: 'Pack Off', lines: 1, env: 'SNAPBOX_PACKOFF_LINES' },
+  { key: 'rte', label: 'RTE', lines: 4, env: 'SNAPBOX_RTE_LINES' },
+  { key: 'packoff', label: 'Pack Off', lines: 4, env: 'SNAPBOX_PACKOFF_LINES' },
 ];
 
 /** Areas with their line counts, read from the environment. */

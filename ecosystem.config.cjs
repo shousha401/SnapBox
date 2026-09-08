@@ -16,8 +16,8 @@ module.exports = {
         SNAPBOX_PIN: 'change-me',
         SNAPBOX_TABLES: 4, // CMP line count (pre-areas name, still honoured)
         SNAPBOX_GFF_LINES: 2,
-        SNAPBOX_RTE_LINES: 1,
-        SNAPBOX_PACKOFF_LINES: 1,
+        SNAPBOX_RTE_LINES: 4,
+        SNAPBOX_PACKOFF_LINES: 4,
         // Optional multi-shift boundaries, e.g. '06:00,18:00'. Empty = one daily shift.
         SNAPBOX_SHIFTS: '',
       },

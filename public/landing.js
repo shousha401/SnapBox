@@ -8,8 +8,8 @@ const lineGrid = document.getElementById('lineGrid');
 const FALLBACK_AREAS = [
   { key: 'cmp', label: 'CMP', lines: 4 },
   { key: 'gff', label: 'GFF', lines: 2 },
-  { key: 'rte', label: 'RTE', lines: 1 },
-  { key: 'packoff', label: 'Pack Off', lines: 1 },
+  { key: 'rte', label: 'RTE', lines: 4 },
+  { key: 'packoff', label: 'Pack Off', lines: 4 },
 ];
 
 let areasPromise = null;
@@ -33,7 +33,7 @@ for (const card of document.querySelectorAll('.choice-card[data-area]')) {
     const areas = await getAreas();
     const area = areas.find((a) => a.key === key) || { key, label: key.toUpperCase(), lines: 4 };
 
-    // A single-station area (RTE, Pack Off) has nothing to pick — go straight in.
+    // An area with a single line has nothing to pick — go straight in.
     if (area.lines === 1) {
       location.href = `/line/${area.key}/1`;
       return;
